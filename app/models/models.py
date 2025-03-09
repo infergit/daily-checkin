@@ -1,5 +1,6 @@
 # app/models/models.py
 from datetime import datetime
+import pytz
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
@@ -24,8 +25,8 @@ class User(db.Model, UserMixin):
 class CheckIn(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    check_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
-    check_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    check_date = db.Column(db.Date, nullable=False)  # Store UTC date
+    check_time = db.Column(db.DateTime, nullable=False)  # Store UTC time
     note = db.Column(db.Text, nullable=True)
     
     def __repr__(self):

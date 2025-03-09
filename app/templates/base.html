@@ -68,7 +68,10 @@
         </div>
     </footer>
 
+    {% block scripts %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/timezone.js') }}"></script>
+    {% endblock %}
 </body>
 </html>
