@@ -47,6 +47,10 @@ def dashboard():
         user_id=current_user.id
     ).order_by(CheckIn.check_date.desc()).limit(7).all()
     
+    # Convert UTC times to local times before passing to template
+    for checkin in recent_checkins:
+        checkin.check_time = to_user_timezone(checkin.check_time)
+    
     return render_template(
         'checkin/dashboard.html',
         title='Dashboard',

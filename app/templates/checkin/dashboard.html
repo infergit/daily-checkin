@@ -45,7 +45,7 @@
                     <ul class="list-group">
                         {% for check in recent_checkins %}
                             <li class="list-group-item">
-                                <strong>{{ check.check_date.strftime('%Y-%m-%d') }}</strong>
+                                <strong>{{ check.check_time.strftime('%Y-%m-%d %H:%M:%S') }}</strong>
                                 {% if check.note %}
                                     <p class="mb-0 small text-muted">{{ check.note }}</p>
                                 {% endif %}
