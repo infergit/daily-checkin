@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Create Project - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">Create New Project</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control") }}
+                        {% for error in form.name.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=3) }}
+                        {% for error in form.description.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.frequency_type.label(class="form-label") }}
+                        {{ form.frequency_type(class="form-select") }}
+                        {% for error in form.frequency_type.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
+                        <div class="form-text">
+                            Daily: Members can check in once per day<br>
+                            Unlimited: Members can check in multiple times per day
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Icon (optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-{{ form.icon.data or 'check-circle' }}"></i>
+                                </span>
+                                {{ form.icon(class="form-control", placeholder="check-circle") }}
+                            </div>
+                            <div class="form-text">
+                                Enter a Bootstrap icon name (e.g., check-circle, star, heart)
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Color (optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text" id="color-preview" 
+                                      style="background-color: {{ form.color.data or '#ffffff' }}; width: 40px;">
+                                </span>
+                                {{ form.color(class="form-control", placeholder="#ccf2ff") }}
+                            </div>
+                            <div class="form-text">
+                                Enter a color code (e.g., #ccf2ff)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.is_public(class="form-check-input") }}
+                        {{ form.is_public.label(class="form-check-label") }}
+                        <div class="form-text">
+                            Public projects are visible to all users
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('projects.list_projects') }}">Back to Projects</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.getElementById('icon').addEventListener('input', function() {
+        const iconPreview = this.previousElementSibling.querySelector('i');
+        iconPreview.className = `bi bi-${this.value || 'check-circle'}`;
+    });
+    
+    document.getElementById('color').addEventListener('input', function() {
+        const colorPreview = document.getElementById('color-preview');
+        colorPreview.style.backgroundColor = this.value || '#ffffff';
+    });
+</script>
+{% endblock %}
