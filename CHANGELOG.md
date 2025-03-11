@@ -1,7 +1,16 @@
+daily-checkin/CHANGELOG.md
 # Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.2.0] - 2024-03-10
+### Added
+- Added time display in recent check-ins section
+- Enhanced datetime format consistency across dashboard and history pages
 
 ## [1.1.0] - 2024-03-09
-
 ### Fixed
 - Fixed timezone handling in check-in records
 - Now properly stores UTC time in database and converts to local time for display
@@ -15,34 +24,6 @@
 - Modified CheckIn model to store pure UTC times
 - Updated dashboard and history views to handle timezone conversion
 - Moved all JavaScript includes into block scripts in base template
-
-### Migration
-1. Create new branch:
-```bash
-git checkout -b fix/timezone-bug main
-```
-
-2. Run database migration:
-```bash
-flask db migrate -m "fix timezone data"
-flask db upgrade
-```
-
-3. Deploy steps:
-```bash
-# On production server
-git fetch origin
-git checkout fix/timezone-bug
-flask db upgrade
-sudo systemctl restart daily-checkin
-```
-
-4. Merge to main after verification:
-```bash
-git checkout main
-git merge fix/timezone-bug
-git push origin main
-```
 
 ### Dependencies
 - Added pytz package requirement
