@@ -143,3 +143,90 @@ def join_project(project_id):
         flash('You have successfully joined the project!', 'success')
     
     return redirect(url_for('projects.view_project', project_id=project_id))
+
+@projects.route('/<int:project_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    
+    # Check if the user has permission to edit this project
+    member = ProjectMember.query.filter_by(
+        project_id=project_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not member or member.role not in ['creator', 'admin']:
+        flash('You do not have permission to edit this project.', 'danger')
+        return redirect(url_for('projects.view_project', project_id=project_id))
+    
+    form = ProjectForm()
+    
+    if form.validate_on_submit():
+        project.name = form.name.data
+        project.description = form.description.data
+        project.is_public = form.is_public.data
+        project.frequency_type = form.frequency_type.data
+        project.icon = form.icon.data
+        project.color = form.color.data
+        
+        db.session.commit()
+        flash('Project updated successfully!', 'success')
+        return redirect(url_for('projects.view_project', project_id=project_id))
+    
+    elif request.method == 'GET':
+        # Pre-populate form with existing project data
+        form.name.data = project.name
+        form.description.data = project.description
+        form.is_public.data = project.is_public
+        form.frequency_type.data = project.frequency_type
+        form.icon.data = project.icon
+        form.color.data = project.color
+    
+    return render_template(
+        'projects/edit.html', 
+        title='Edit Project',
+        form=form,
+        project=project
+    )
+
+@projects.route('/<int:project_id>/delete', methods=['POST'])
+@login_required
+def delete_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    
+    # Only the creator can delete a project
+    member = ProjectMember.query.filter_by(
+        project_id=project_id,
+        user_id=current_user.id,
+        role='creator'
+    ).first()
+    
+    if not member:
+        flash('Only the project creator can delete this project.', 'danger')
+        return redirect(url_for('projects.view_project', project_id=project_id))
+    
+    # Check if project has check-ins
+    from app.models.models import CheckIn
+    check_in_count = CheckIn.query.filter_by(project_id=project_id).count()
+    
+    if check_in_count > 0:
+        flash(f'Cannot delete project with existing check-ins ({check_in_count} records found). Remove all check-ins first.', 'danger')
+        return redirect(url_for('projects.view_project', project_id=project_id))
+    
+    # Delete related records first
+    # 1. Delete project members
+    ProjectMember.query.filter_by(project_id=project_id).delete()
+    
+    # 2. Delete user project statistics
+    UserProjectStat.query.filter_by(project_id=project_id).delete()
+    
+    # 3. Delete project statistics
+    from app.models.models import ProjectStat
+    ProjectStat.query.filter_by(project_id=project_id).delete()
+    
+    # 4. Finally delete the project
+    db.session.delete(project)
+    db.session.commit()
+    
+    flash('Project has been deleted successfully.', 'success')
+    return redirect(url_for('projects.list_projects'))

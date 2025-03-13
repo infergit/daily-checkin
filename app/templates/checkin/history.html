@@ -60,6 +60,7 @@
                             <th>Date</th>
                             <th>Time</th>
                             <th>Note</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -71,6 +72,19 @@
                                 <td>{{ check.display_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ check.check_time.strftime('%H:%M:%S') }}</td>
                                 <td>{{ check.note or '—' }}</td>
+                                <td>
+                                    {% if check.user_id == current_user.id %}
+                                    <form action="{{ url_for('checkin.delete_checkin', checkin_id=check.id) }}" method="POST" 
+                                          class="d-inline" onsubmit="return confirm('Are you sure you want to delete this check-in?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>

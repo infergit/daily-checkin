@@ -205,6 +205,69 @@ def history():
         is_public=project.is_public
     )
 
+@checkin.route('/delete/<int:checkin_id>', methods=['POST'])
+@login_required
+def delete_checkin(checkin_id):
+    # Get the check-in record
+    checkin = CheckIn.query.get_or_404(checkin_id)
+    
+    # Verify that the check-in belongs to the current user
+    if checkin.user_id != current_user.id:
+        flash('You do not have permission to delete this check-in.', 'danger')
+        return redirect(url_for('checkin.history'))
+    
+    # Store project_id before deleting the record
+    project_id = checkin.project_id
+    
+    # Delete the check-in
+    db.session.delete(checkin)
+    
+    # Update project statistics
+    update_project_stats(project_id)
+    
+    # Update user project statistics
+    # Get all remaining check-ins for this user in this project
+    user_checkins = CheckIn.query.filter_by(
+        user_id=current_user.id,
+        project_id=project_id
+    ).order_by(CheckIn.check_date).all()
+    
+    # Reset stats
+    user_stats = UserProjectStat.query.filter_by(
+        user_id=current_user.id,
+        project_id=project_id
+    ).first()
+    
+    if user_stats:
+        user_stats.total_checkins = len(user_checkins)
+        
+        # Recalculate streak from scratch
+        current_streak = 0
+        highest_streak = 0
+        last_date = None
+        
+        for check in user_checkins:
+            if not last_date or (check.check_date - last_date).days == 1:
+                current_streak += 1
+            elif last_date and check.check_date == last_date:
+                # Same day check-in, don't increment streak
+                pass
+            else:
+                # Streak broken
+                current_streak = 1
+            
+            highest_streak = max(highest_streak, current_streak)
+            last_date = check.check_date
+        
+        user_stats.current_streak = current_streak
+        user_stats.highest_streak = highest_streak
+        user_stats.last_checkin_date = last_date if user_checkins else None
+    
+    db.session.commit()
+    
+    flash('Check-in record has been deleted.', 'success')
+    return redirect(url_for('checkin.history', project=project_id))
+
 def update_project_stats(project_id):
     """更新项目统计数据"""
     stats = ProjectStat.query.filter_by(project_id=project_id).first()
