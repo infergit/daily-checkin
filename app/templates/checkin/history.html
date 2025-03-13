@@ -68,7 +68,7 @@
                                 {% if view_mode == 'all' and is_public %}
                                 <td>{{ username }}</td>
                                 {% endif %}
-                                <td>{{ check.check_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ check.display_date.strftime('%Y-%m-%d') }}</td>
                                 <td>{{ check.check_time.strftime('%H:%M:%S') }}</td>
                                 <td>{{ check.note or '—' }}</td>
                             </tr>

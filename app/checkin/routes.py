@@ -45,15 +45,14 @@ def dashboard():
     
     # Get current time in UTC
     now_utc = datetime.now(pytz.UTC)
-    # Convert to user's timezone for date comparison
+    # Convert to user's timezone for display purposes
     local_now = to_user_timezone(now_utc)
-    today = local_now.date()
     
-    # Check if user already checked in today for this project
+    # Check if user already checked in today for this project - using UTC date
     today_checkin = CheckIn.query.filter_by(
         user_id=current_user.id,
         project_id=project.id,
-        check_date=today
+        check_date=now_utc.date()  # Use UTC date for database query
     ).first()
     
     if form.validate_on_submit() and request.method == 'POST':
@@ -63,7 +62,7 @@ def dashboard():
             checkin = CheckIn(
                 user_id=current_user.id,
                 project_id=project.id,
-                check_date=today,
+                check_date=now_utc.date(),  # Store UTC date
                 check_time=now_utc,
                 note=form.note.data,
                 location=None  # 可以在后续版本中添加位置功能
@@ -72,8 +71,8 @@ def dashboard():
             
             # 更新项目统计
             update_project_stats(project.id)
-            # 更新用户项目统计
-            update_user_project_stats(current_user.id, project.id, today)
+            # 更新用户项目统计 - pass UTC date
+            update_user_project_stats(current_user.id, project.id, now_utc.date())
             
             db.session.commit()
             flash('Check-in successful!', 'success')
@@ -101,7 +100,12 @@ def dashboard():
     
     # Convert UTC times to local times before passing to template
     for checkin in recent_checkins:
+        # Convert check_time to local time
         checkin.check_time = to_user_timezone(checkin.check_time)
+        # Add display_date attribute for template use
+        checkin.display_date = to_user_timezone(
+            datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
+        ).date()
     
     return render_template(
         'checkin/dashboard.html',
@@ -180,6 +184,17 @@ def history():
     # 分页
     page_items = checkins_query.paginate(page=page, per_page=10)
     
+    # Convert UTC times to user's local timezone
+    for item in page_items.items:
+        # Each item is a tuple of (CheckIn, username)
+        checkin = item[0]
+        # Convert check_time to local time
+        checkin.check_time = to_user_timezone(checkin.check_time)
+        # Add display_date attribute for template use
+        checkin.display_date = to_user_timezone(
+            datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
+        ).date()
+    
     return render_template(
         'checkin/history.html',
         title='Check-in History',
@@ -220,10 +235,14 @@ def update_project_stats(project_id):
     
     return stats
 
-def update_user_project_stats(user_id, project_id, today):
-    """更新用户项目统计数据"""
-    from datetime import timedelta
+def update_user_project_stats(user_id, project_id, utc_today):
+    """更新用户项目统计数据
     
+    Args:
+        user_id: 用户ID
+        project_id: 项目ID
+        utc_today: UTC日期(datetime.date)
+    """
     user_stats = UserProjectStat.query.filter_by(
         user_id=user_id,
         project_id=project_id
@@ -243,21 +262,21 @@ def update_user_project_stats(user_id, project_id, today):
     if not user_stats.last_checkin_date:
         user_stats.current_streak = 1
         user_stats.highest_streak = 1
-        user_stats.last_checkin_date = today
+        user_stats.last_checkin_date = utc_today
         return user_stats
     
-    # 计算连续打卡天数
-    if user_stats.last_checkin_date == today - timedelta(days=1):
+    # 计算连续打卡天数 - 使用UTC日期进行比较
+    if user_stats.last_checkin_date == utc_today - timedelta(days=1):
         # 连续打卡
         user_stats.current_streak += 1
         if user_stats.current_streak > user_stats.highest_streak:
             user_stats.highest_streak = user_stats.current_streak
-    elif user_stats.last_checkin_date == today:
+    elif user_stats.last_checkin_date == utc_today:
         # 今天已经打卡过了，不更新streak
         pass
     else:
         # 断了连续性
         user_stats.current_streak = 1
     
-    user_stats.last_checkin_date = today
+    user_stats.last_checkin_date = utc_today
     return user_stats
