@@ -1,0 +1,14 @@
+<div class="card">
+    <div class="card-body">
+        <form method="GET" action="{{ url }}" class="mb-0">
+            <div class="row g-2 align-items-center">
+                <div class="col">
+                    {{ project_select_form.project(class="form-select", id="project-selector") }}
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary" id="project-switch-btn">Switch</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

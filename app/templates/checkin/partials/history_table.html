@@ -1,0 +1,38 @@
+<table class="table table-striped table-hover">
+    <thead class="table-light">
+        <tr>
+            {% if view_mode == 'all' and is_public %}
+            <th>User</th>
+            {% endif %}
+            <th>Date</th>
+            <th>Time</th>
+            <th>Note</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for check, username in checkins.items %}
+            <tr {% if check.user_id == current_user.id %}class="table-success"{% endif %}>
+                {% if view_mode == 'all' and is_public %}
+                <td>{{ username }}</td>
+                {% endif %}
+                <td>{{ check.display_date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ check.check_time.strftime('%H:%M:%S') }}</td>
+                <td>{{ check.note or '—' }}</td>
+                <td>
+                    {% if check.user_id == current_user.id %}
+                    <form action="{{ url_for('checkin.delete_checkin', checkin_id=check.id) }}" method="POST" 
+                          class="d-inline delete-checkin-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>

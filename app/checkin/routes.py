@@ -1,5 +1,5 @@
 # app/checkin/routes.py
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta  # 添加 timedelta 导入
 from app import db
@@ -195,6 +195,24 @@ def history():
             datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
         ).date()
     
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # Render only the table portion
+        table_html = render_template(
+            'checkin/partials/history_table.html',
+            project=project,
+            checkins=page_items,
+            view_mode=view_mode,
+            is_public=project.is_public,
+            current_user=current_user
+        )
+        
+        return jsonify({
+            'success': True,
+            'html': table_html
+        })
+    
+    # For regular requests, return the full page
     return render_template(
         'checkin/history.html',
         title='Check-in History',
@@ -205,7 +223,7 @@ def history():
         is_public=project.is_public
     )
 
-@checkin.route('/delete/<int:checkin_id>', methods=['POST'])
+@checkin.route('/delete_checkin/<int:checkin_id>', methods=['POST'])
 @login_required
 def delete_checkin(checkin_id):
     # Get the check-in record
@@ -213,6 +231,8 @@ def delete_checkin(checkin_id):
     
     # Verify that the check-in belongs to the current user
     if checkin.user_id != current_user.id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'message': 'You do not have permission to delete this check-in.'})
         flash('You do not have permission to delete this check-in.', 'danger')
         return redirect(url_for('checkin.history'))
     
@@ -264,6 +284,14 @@ def delete_checkin(checkin_id):
         user_stats.last_checkin_date = last_date if user_checkins else None
     
     db.session.commit()
+    
+    # Check if this is an AJAX request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({
+            'success': True, 
+            'message': 'Check-in record has been deleted.',
+            'dashboardUrl': url_for('checkin.dashboard', project=project_id)
+        })
     
     flash('Check-in record has been deleted.', 'success')
     return redirect(url_for('checkin.history', project=project_id))

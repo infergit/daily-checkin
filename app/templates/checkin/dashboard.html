@@ -9,20 +9,9 @@
         <h2>Dashboard</h2>
     </div>
     <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <form method="GET" action="{{ url_for('checkin.dashboard') }}" class="mb-0">
-                    <div class="row g-2 align-items-center">
-                        <div class="col">
-                            {{ project_select_form.project(class="form-select") }}
-                        </div>
-                        <div class="col-auto">
-                            <button type="submit" class="btn btn-primary">Switch</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
+        {% with url=url_for('checkin.dashboard') %}
+            {% include "checkin/partials/project_selector.html" %}
+        {% endwith %}
     </div>
 </div>
 
