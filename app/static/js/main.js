@@ -114,37 +114,46 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                // Find the table row and remove it
-                                const row = newForm.closest('tr');
+                                // Try to find parent element (could be a table row or a card)
+                                const row = newForm.closest('tr') || newForm.closest('.card');
                                 
-                                // Optional: Add fade-out animation
-                                row.style.transition = 'opacity 0.3s';
-                                row.style.opacity = '0';
-                                
-                                // Remove the row after animation completes
-                                setTimeout(() => {
-                                    row.remove();
+                                if (row) {
+                                    // Optional: Add fade-out animation
+                                    row.style.transition = 'opacity 0.3s';
+                                    row.style.opacity = '0';
                                     
-                                    // Check if table is now empty
-                                    const tbody = document.querySelector('tbody');
-                                    if (tbody && tbody.children.length === 0) {
-                                        // Replace table with "no records" message
-                                        const tableContainer = document.querySelector('.table-responsive');
-                                        if (tableContainer) {
-                                            tableContainer.innerHTML = `
-                                                <div class="text-center py-4">
-                                                    <p class="text-muted">No check-in records found for this project.</p>
-                                                    <a href="${data.dashboardUrl}" class="btn btn-primary mt-2">
-                                                        <i class="bi bi-check-circle"></i> Check In Now
-                                                    </a>
-                                                </div>
-                                            `;
+                                    // Remove the row after animation completes
+                                    setTimeout(() => {
+                                        row.remove();
+                                        
+                                        // Check if table/container is now empty
+                                        const container = document.querySelector('tbody') || document.querySelector('.d-md-none');
+                                        
+                                        if ((container && container.children.length === 0) || 
+                                            (container.tagName === 'TBODY' && container.querySelectorAll('tr').length === 0)) {
+                                            
+                                            // Replace with "no records" message
+                                            const tableContainer = document.querySelector('.table-responsive');
+                                            if (tableContainer) {
+                                                tableContainer.innerHTML = `
+                                                    <div class="text-center py-4">
+                                                        <p class="text-muted">No check-in records found for this project.</p>
+                                                        <a href="${data.dashboardUrl}" class="btn btn-primary mt-2">
+                                                            <i class="bi bi-check-circle"></i> Check In Now
+                                                        </a>
+                                                    </div>
+                                                `;
+                                            }
                                         }
-                                    }
-                                    
-                                    // Show success message
-                                    showToast('Check-in deleted successfully', 'success');
-                                }, 300);
+                                        
+                                        // Show success message
+                                        showToast('Check-in deleted successfully', 'success');
+                                    }, 300);
+                                } else {
+                                    // If we couldn't find the parent element, just reload the page
+                                    showToast('Check-in deleted successfully. Refreshing...', 'success');
+                                    setTimeout(() => window.location.reload(), 1000);
+                                }
                             } else {
                                 showToast(data.message || 'An error occurred', 'danger');
                             }
