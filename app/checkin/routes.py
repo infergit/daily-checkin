@@ -43,16 +43,27 @@ def dashboard():
     
     form = CheckInForm()
     
-    # Get current time in UTC
+    # Get current time in UTC and user's local timezone
     now_utc = datetime.now(pytz.UTC)
-    # Convert to user's timezone for display purposes
     local_now = to_user_timezone(now_utc)
-    
-    # Check if user already checked in today for this project - using UTC date
-    today_checkin = CheckIn.query.filter_by(
-        user_id=current_user.id,
-        project_id=project.id,
-        check_date=now_utc.date()  # Use UTC date for database query
+    user_today = local_now.date()  # Get the user's local date
+
+    # Find check-ins from the user's "today" in UTC time
+    # First get the start and end of the user's day in their timezone
+    start_of_day_local = datetime.combine(user_today, datetime.min.time())
+    end_of_day_local = datetime.combine(user_today, datetime.max.time())
+
+    # Convert these times to UTC for the database query
+    user_tz = get_user_timezone()
+    start_of_day_utc = user_tz.localize(start_of_day_local).astimezone(pytz.UTC)
+    end_of_day_utc = user_tz.localize(end_of_day_local).astimezone(pytz.UTC)
+
+    # Query using the UTC time range that corresponds to the user's local day
+    today_checkin = CheckIn.query.filter(
+        CheckIn.user_id == current_user.id,
+        CheckIn.project_id == project.id,
+        CheckIn.check_time >= start_of_day_utc,
+        CheckIn.check_time <= end_of_day_utc
     ).first()
     
     if form.validate_on_submit() and request.method == 'POST':
