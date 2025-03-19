@@ -6,6 +6,8 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect  # Add this import
 from config import Config
 from datetime import timedelta
+import time
+import os
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -41,6 +43,18 @@ def create_app(config_class=Config):
     @app.route('/')
     def index():
         return render_template('index.html')
+    
+    @app.context_processor
+    def inject_asset_version():
+        # Get last modified time of main.js
+        try:
+            js_mtime = os.path.getmtime('app/static/js/main.js')
+            css_mtime = os.path.getmtime('app/static/css/main.css')
+            version = int(max(js_mtime, css_mtime))  # Use the latest modification time
+        except OSError:
+            version = int(time.time())  # Fallback to current time
+            
+        return {'asset_version': version}
     
     @app.template_global()
     def get_pending_join_request_count(project_id):

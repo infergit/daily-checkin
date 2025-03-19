@@ -179,53 +179,30 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add change event listener to automatically submit the form
         projectSelector.addEventListener('change', function() {
-            // Get the form and submit it immediately
+            // Get the form
             const form = this.closest('form');
-            form.submit();
+            
+            // Show a brief loading indicator in the select
+            const originalText = projectSelector.options[projectSelector.selectedIndex].text;
+            projectSelector.options[projectSelector.selectedIndex].text = 'Loading...';
+            projectSelector.disabled = true;
+            
+            // For dashboard and history pages
+            if (window.location.pathname.includes('/checkin/dashboard') || 
+                window.location.pathname.includes('/checkin/history')) {
+                
+                // Redirect directly to the page with the selected project
+                const selectedProject = projectSelector.value;
+                const baseUrl = window.location.pathname.split('?')[0];
+                window.location.href = `${baseUrl}?project=${selectedProject}`;
+            } else {
+                // For other pages, just submit the form normally
+                form.submit();
+            }
         });
     }
 
     // Other existing event handlers...
-});
-
-// Function specifically for hiding project switching overlays
-function hideProjectSwitchOverlays() {
-    // Hide global loading overlay if it exists
-    const globalOverlay = document.getElementById('global-loading-overlay');
-    if (globalOverlay) {
-        globalOverlay.classList.add('d-none');
-        globalOverlay.classList.remove('d-flex');
-        globalOverlay.style.display = 'none'; // Explicit style
-    }
-    
-    // Hide project selector loading
-    const selectorOverlay = document.getElementById('project-selector-loading');
-    if (selectorOverlay) {
-        selectorOverlay.style.display = 'none';
-    }
-    
-    // Re-enable project selector
-    const projectSelector = document.getElementById('project-selector');
-    if (projectSelector) {
-        projectSelector.disabled = false;
-    }
-}
-
-// Modify page load handler to be more targeted
-window.addEventListener('load', function() {
-    // Only handle project-related UI if we were switching projects
-    if (sessionStorage.getItem('projectSwitching') === 'true') {
-        hideProjectSwitchOverlays();
-        
-        // Clear the flag
-        sessionStorage.removeItem('projectSwitching');
-        
-        // Show toast only if we came from a project switch
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('project')) {
-            showToast('Project switched successfully', 'success');
-        }
-    }
 });
 
 // Simple toast notification function

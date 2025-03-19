@@ -22,7 +22,6 @@
                 {% if project.icon %}<i class="bi bi-{{ project.icon }} me-2"></i>{% endif %}
                 {{ project.name }} - History
             </h3>
-            <!-- 修改视图切换按钮部分 -->
             <div class="btn-group">
                 <button type="button" data-view="all" data-url="{{ url_for('checkin.history', project=project.id, view='all') }}"
                    class="btn btn-sm view-toggle {% if view_mode == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
@@ -36,24 +35,6 @@
         </div>
     </div>
     <div class="card-body">
-        <div class="card mb-3">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Privacy Information</h5>
-            </div>
-            <div class="card-body">
-                <p><i class="bi bi-info-circle"></i> You can only see check-ins from project members who are also your friends.</p>
-                
-                {% if view_mode == 'all' %}
-                    <div class="alert alert-light">
-                        <strong>Currently viewing:</strong> Check-ins from you and your friends in this project
-                    </div>
-                {% else %}
-                    <div class="alert alert-light">
-                        <strong>Currently viewing:</strong> Only your check-ins
-                    </div>
-                {% endif %}
-            </div>
-        </div>
         {% if checkins.items %}
             <div id="checkin-table-container">
                 <!-- Include the partial template instead of duplicating the code -->
