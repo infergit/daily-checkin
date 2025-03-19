@@ -62,7 +62,7 @@
                             <li class="list-group-item">
                                 <strong>{{ check.check_time.strftime('%Y-%m-%d %H:%M:%S') }}</strong>
                                 {% if check.note %}
-                                    <p class="mb-0 small text-muted">{{ check.note }}</p>
+                                    <p class="mb-0 small text-muted preserve-newlines">{{ check.note }}</p>
                                 {% endif %}
                             </li>
                         {% endfor %}
