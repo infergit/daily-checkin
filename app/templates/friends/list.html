@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}My Friends - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>My Friends</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('friends.search_users') }}" class="btn btn-primary">
+            <i class="bi bi-search"></i> Find Friends
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Friends list -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Friends List</h3>
+            </div>
+            <div class="card-body">
+                {% if friends %}
+                    <div class="list-group">
+                        {% for user, relationship in friends %}
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ user.username }}</strong>
+                                <!-- Added relationship timestamp with timezone conversion -->
+                                <div class="text-muted small">
+                                    <i class="bi bi-calendar-check"></i> Friends since {{ to_user_timezone(relationship.updated_at).strftime('%b %d, %Y') }}
+                                </div>
+                            </div>
+                            <div>
+                                <form action="{{ url_for('friends.remove_friend', user_id=user.id) }}" method="post" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                            onclick="return confirm('Are you sure you want to remove this friend?')">
+                                        <i class="bi bi-person-x"></i> Remove Friend
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-3">You don't have any friends yet</p>
+                        <a href="{{ url_for('friends.search_users') }}" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Find Friends
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Friend requests -->
+    <div class="col-lg-4">
+        <!-- Pending requests -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h3 class="card-title mb-0">Pending Friend Requests</h3>
+            </div>
+            <div class="card-body">
+                {% if pending_requests %}
+                    <div class="list-group">
+                        {% for user, relationship in pending_requests %}
+                        <div class="list-group-item">
+                            <div class="mb-2">
+                                <strong>{{ user.username }}</strong>
+                                <!-- Added request time with timezone conversion -->
+                                <div class="text-muted small">
+                                    <i class="bi bi-clock"></i> Requested {{ to_user_timezone(relationship.created_at).strftime('%b %d, %Y') }}
+                                </div>
+                            </div>
+                            <div class="btn-group w-100">
+                                <form action="{{ url_for('friends.accept_request', relationship_id=relationship.id) }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-success me-1">
+                                        <i class="bi bi-check-lg"></i> Accept
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('friends.reject_request', relationship_id=relationship.id) }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-x-lg"></i> Reject
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-center text-muted py-3 mb-0">No pending friend requests</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Sent requests -->
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h3 class="card-title mb-0">Sent Friend Requests</h3>
+            </div>
+            <div class="card-body">
+                {% if sent_requests %}
+                    <div class="list-group">
+                        {% for user, relationship in sent_requests %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ user.username }}</strong>
+                                    <!-- Added sent time with timezone conversion -->
+                                    <div class="text-muted small">
+                                        <i class="bi bi-clock"></i> Sent {{ to_user_timezone(relationship.created_at).strftime('%b %d, %Y') }}
+                                    </div>
+                                    <span class="badge bg-warning text-dark">Waiting for acceptance</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-center text-muted py-3 mb-0">No pending sent requests</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

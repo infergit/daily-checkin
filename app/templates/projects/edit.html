@@ -68,11 +68,15 @@
                         </div>
                     </div>
                     
-                    <div class="mb-3 form-check">
-                        {{ form.is_public(class="form-check-input") }}
-                        {{ form.is_public.label(class="form-check-label") }}
+                    <div class="mb-3">
+                        {{ form.visibility.label(class="form-label") }}
+                        {{ form.visibility(class="form-select") }}
+                        {% for error in form.visibility.errors %}
+                            <div class="text-danger">{{ error }}</div>
+                        {% endfor %}
                         <div class="form-text">
-                            Public projects are visible to all users
+                            Private: Only invited members can join<br>
+                            By Invitation: Visible to all users, but requires approval to join
                         </div>
                     </div>
                     

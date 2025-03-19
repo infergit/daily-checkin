@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}My Project Invitations - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>My Project Invitations</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h3 class="card-title mb-0">Pending Project Invitations</h3>
+            </div>
+            <div class="card-body">
+                {% if invitations %}
+                <div class="list-group">
+                    {% for project, inviter, invitation in invitations %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="mb-0">
+                                {% if project.icon %}<i class="bi bi-{{ project.icon }} me-2"></i>{% endif %}
+                                {{ project.name }}
+                            </h5>
+                            <small class="text-muted">{{ invitation.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        </div>
+                        
+                        <p class="text-muted">{{ project.description or 'No project description' }}</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="bi bi-person"></i> Invited by: {{ inviter.username }}
+                            </small>
+                            
+                            <div class="btn-group">
+                                <form action="{{ url_for('projects.accept_invitation', invitation_id=invitation.id) }}" method="post" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-success me-1">
+                                        <i class="bi bi-check-lg"></i> Accept
+                                    </button>
+                                </form>
+                                <form action="{{ url_for('projects.reject_invitation', invitation_id=invitation.id) }}" method="post" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-x-lg"></i> Reject
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">No pending project invitations</p>
+                    <a href="{{ url_for('projects.list_projects') }}" class="btn btn-primary">
+                        <i class="bi bi-grid"></i> View Projects
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

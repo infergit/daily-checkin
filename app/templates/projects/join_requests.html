@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Join Requests{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col">
+            <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-outline-secondary mb-3">
+                <i class="bi bi-arrow-left"></i> Back to Project
+            </a>
+            <h2>Join Requests for "{{ project.name }}"</h2>
+        </div>
+    </div>
+
+    {% if pending_requests %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Pending Join Requests</h4>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Request Date</th>
+                            <th>Message</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user, request in pending_requests %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ request.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ request.message or 'No message provided.' }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <form method="POST" action="{{ url_for('projects.approve_join_request', project_id=project.id, request_id=request.id) }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-check-circle"></i> Approve
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('projects.reject_join_request', project_id=project.id, request_id=request.id) }}" class="d-inline ms-1">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-x-circle"></i> Reject
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <p class="mb-0">There are no pending join requests for this project.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

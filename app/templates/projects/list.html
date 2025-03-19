@@ -27,6 +27,9 @@
                                 {% endif %}
                                 <strong>{{ project.name }}</strong>
                                 <span class="badge bg-secondary float-end">{{ membership.role }}</span>
+                                <span class="badge float-end me-2 {% if project.visibility == 'invitation' %}bg-info{% else %}bg-secondary{% endif %}">
+                                    {{ project.visibility|capitalize }}
+                                </span>
                             </div>
                             <div class="card-body">
                                 <p class="card-text">{{ project.description|truncate(100) or "No description" }}</p>
@@ -47,31 +50,54 @@
             </div>
         {% else %}
             <div class="alert alert-info">
-                <p>You haven't joined any projects yet. Create your first project or join an existing one!</p>
+                <p>You don't have any projects yet.</p>
+                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Your First Project</a>
             </div>
         {% endif %}
     </div>
-
+    
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Public Projects</h5>
+                <h4 class="mb-0">Discoverable Projects</h4>
             </div>
             <div class="card-body">
-                {% if public_projects %}
+                {% if invitation_projects %}
                     <div class="list-group">
-                        {% for project in public_projects %}
-                            <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="list-group-item list-group-item-action">
-                                {% if project.icon %}
-                                <i class="bi bi-{{ project.icon }} me-2"></i>
+                        {% for project in invitation_projects %}
+                            {% set already_member = false %}
+                            {% for user_project, membership in user_projects %}
+                                {% if project.id == user_project.id %}
+                                    {% set already_member = true %}
                                 {% endif %}
-                                {{ project.name }}
-                                <span class="badge bg-secondary float-end">Public</span>
-                            </a>
+                            {% endfor %}
+                            {% if not already_member %}
+                                <div class="list-group-item list-group-item-action">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h5 class="mb-1">
+                                            {% if project.icon %}<i class="bi bi-{{ project.icon }} me-2"></i>{% endif %}
+                                            {{ project.name }}
+                                        </h5>
+                                        <span class="badge bg-info">{{ project.visibility|capitalize }}</span>
+                                    </div>
+                                    <p class="mb-1">{{ project.description|truncate(100) or "No description" }}</p>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
+                                        </small>
+                                        <form method="POST" action="{{ url_for('projects.join_project', project_id=project.id) }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-person-plus"></i> Request to Join
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 {% else %}
-                    <p class="text-center">No public projects available.</p>
+                    <p class="text-center text-muted py-3 mb-0">No discoverable projects available</p>
                 {% endif %}
             </div>
         </div>

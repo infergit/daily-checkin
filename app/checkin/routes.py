@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta  # 添加 timedelta 导入
 from app import db
-from app.models.models import CheckIn, Project, ProjectMember, ProjectStat, UserProjectStat, User  # 添加 User
+from app.models.models import CheckIn, Project, ProjectMember, ProjectStat, UserProjectStat, User, FriendRelationship  # 添加 User, FriendRelationship
 from app.checkin.forms import CheckInForm, ProjectSelectForm
 from app.utils.timezone import get_user_timezone, to_user_timezone
 import pytz
@@ -133,18 +133,16 @@ def dashboard():
 @checkin.route('/history')
 @login_required
 def history():
-    # 获取用户可参与的项目
+    """Display check-in history with dual privacy protection"""
+    project_id = request.args.get('project', type=int)
+    
+    # Get user's projects
     projects = db.session.query(Project).join(
         ProjectMember, Project.id == ProjectMember.project_id
     ).filter(
         ProjectMember.user_id == current_user.id
     ).all()
     
-    # 从URL参数获取项目ID和页码
-    project_id = request.args.get('project', type=int)
-    page = request.args.get('page', 1, type=int)
-    
-    # 获取项目
     if project_id is None and projects:
         project_id = projects[0].id
     
@@ -154,51 +152,96 @@ def history():
         flash('Project not found or you don\'t have access.', 'danger')
         return redirect(url_for('projects.list_projects'))
     
-    # 从URL获取视图模式，如果没有提供，则根据项目可见性设置默认值
-    view_mode = request.args.get('view')
-    if view_mode is None:
-        # 公开项目默认展示所有人的记录，私有项目默认只展示个人记录
-        view_mode = 'all' if project.is_public else 'personal'
-    
-    # 准备项目选择表单
+    # Prepare project selector form
     project_select_form = ProjectSelectForm()
     project_select_form.project.choices = [(p.id, p.name) for p in projects]
     if project_id:
         project_select_form.project.default = project_id
         project_select_form.process()
     
-    # 查询打卡记录，根据视图模式决定是查看个人还是所有成员的记录
-    if view_mode == 'all' and project.is_public:
-        # 公开项目 - 查看所有成员的打卡记录
+    # Get view mode from request
+    view_mode = request.args.get('view', 'all')
+    if view_mode not in ['all', 'mine']:
+        view_mode = 'all'
+    
+    # Build the check-ins query
+    if view_mode == 'mine':
+        # Only show current user's check-ins
         checkins_query = db.session.query(
             CheckIn, User.username
         ).join(
             User, CheckIn.user_id == User.id
         ).filter(
-            CheckIn.project_id == project.id
-        ).order_by(
-            CheckIn.check_date.desc(), 
-            CheckIn.check_time.desc()
+            CheckIn.project_id == project.id,
+            CheckIn.user_id == current_user.id
         )
     else:
-        # 私有项目或个人视图 - 只查看自己的打卡记录
-        checkins_query = db.session.query(
-            CheckIn, db.literal(current_user.username).label('username')
+        # Show all visible check-ins based on dual privacy protection
+        
+        # First, get all project members who are also friends with the current user
+        project_members = db.session.query(
+            ProjectMember.user_id
         ).filter(
-            CheckIn.user_id == current_user.id,
-            CheckIn.project_id == project.id
-        ).order_by(
-            CheckIn.check_date.desc(), 
-            CheckIn.check_time.desc()
+            ProjectMember.project_id == project.id
+        ).all()
+        project_member_ids = [m.user_id for m in project_members]
+        
+        # Get all friend IDs
+        friend_ids = []
+        # Friends where current user is the requester
+        requester_friends = db.session.query(
+            FriendRelationship.addressee_id
+        ).filter(
+            FriendRelationship.requester_id == current_user.id,
+            FriendRelationship.status == 'accepted'
+        ).all()
+        friend_ids.extend([f.addressee_id for f in requester_friends])
+        
+        # Friends where current user is the addressee
+        addressee_friends = db.session.query(
+            FriendRelationship.requester_id
+        ).filter(
+            FriendRelationship.addressee_id == current_user.id,
+            FriendRelationship.status == 'accepted'
+        ).all()
+        friend_ids.extend([f.requester_id for f in addressee_friends])
+        
+        # Filter for users who are both project members and friends with current user
+        visible_user_ids = [uid for uid in project_member_ids if uid in friend_ids]
+        
+        # Always include current user's own check-ins
+        visible_user_ids.append(current_user.id)
+        
+        # Now query check-ins from visible users
+        checkins_query = db.session.query(
+            CheckIn, User.username
+        ).join(
+            User, CheckIn.user_id == User.id
+        ).filter(
+            CheckIn.project_id == project.id,
+            CheckIn.user_id.in_(visible_user_ids)
         )
     
-    # 分页
-    page_items = checkins_query.paginate(page=page, per_page=10)
+    # Order by date and time, descending
+    checkins_query = checkins_query.order_by(
+        CheckIn.check_date.desc(), 
+        CheckIn.check_time.desc()
+    )
     
-    # Convert UTC times to user's local timezone
-    for item in page_items.items:
-        # Each item is a tuple of (CheckIn, username)
-        checkin = item[0]
+    # Paginate results
+    page = request.args.get('page', 1, type=int)
+    checkins = checkins_query.paginate(
+        page=page, 
+        per_page=10,
+        error_out=False
+    )
+    
+    # Get project stats
+    project_stats = ProjectStat.query.filter_by(project_id=project.id).first()
+    
+    # Convert UTC times to local times before passing to template
+    for checkin_tuple in checkins.items:
+        checkin = checkin_tuple[0]  # 因为这里返回的是 (CheckIn, username) 元组
         # Convert check_time to local time
         checkin.check_time = to_user_timezone(checkin.check_time)
         # Add display_date attribute for template use
@@ -206,32 +249,24 @@ def history():
             datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
         ).date()
     
-    # Check if this is an AJAX request
+    # 检查是否是AJAX请求
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        # Render only the table portion
-        table_html = render_template(
-            'checkin/partials/history_table.html',
-            project=project,
-            checkins=page_items,
-            view_mode=view_mode,
-            is_public=project.is_public,
-            current_user=current_user
-        )
-        
         return jsonify({
             'success': True,
-            'html': table_html
+            'html': render_template('checkin/partials/history_table.html', 
+                                   checkins=checkins,
+                                   view_mode=view_mode,
+                                   project=project)
         })
     
-    # For regular requests, return the full page
     return render_template(
         'checkin/history.html',
         title='Check-in History',
         project=project,
-        checkins=page_items,
         project_select_form=project_select_form,
+        checkins=checkins,
         view_mode=view_mode,
-        is_public=project.is_public
+        project_stats=project_stats
     )
 
 @checkin.route('/delete_checkin/<int:checkin_id>', methods=['POST'])
@@ -306,6 +341,140 @@ def delete_checkin(checkin_id):
     
     flash('Check-in record has been deleted.', 'success')
     return redirect(url_for('checkin.history', project=project_id))
+
+@checkin.route('/api/checkins')
+@login_required
+def api_checkins():
+    """API endpoint to get check-ins with privacy controls"""
+    project_id = request.args.get('project', type=int)
+    
+    # Validate project access
+    project = Project.query.get_or_404(project_id)
+    is_member = ProjectMember.query.filter_by(
+        project_id=project_id, 
+        user_id=current_user.id
+    ).first() is not None
+    
+    if not is_member:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Get view mode from request
+    view_mode = request.args.get('view', 'all')
+    if view_mode not in ['all', 'mine']:
+        view_mode = 'all'
+    
+    # Build the check-ins query
+    if view_mode == 'mine':
+        # Only show current user's check-ins
+        checkins_query = db.session.query(
+            CheckIn, User.username
+        ).join(
+            User, CheckIn.user_id == User.id
+        ).filter(
+            CheckIn.project_id == project.id,
+            CheckIn.user_id == current_user.id
+        )
+    else:
+        # Show all visible check-ins based on dual privacy protection
+        
+        # First, get all project members who are also friends with the current user
+        project_members = db.session.query(
+            ProjectMember.user_id
+        ).filter(
+            ProjectMember.project_id == project.id
+        ).all()
+        project_member_ids = [m.user_id for m in project_members]
+        
+        # Get all friend IDs
+        friend_ids = []
+        # Friends where current user is the requester
+        requester_friends = db.session.query(
+            FriendRelationship.addressee_id
+        ).filter(
+            FriendRelationship.requester_id == current_user.id,
+            FriendRelationship.status == 'accepted'
+        ).all()
+        friend_ids.extend([f.addressee_id for f in requester_friends])
+        
+        # Friends where current user is the addressee
+        addressee_friends = db.session.query(
+            FriendRelationship.requester_id
+        ).filter(
+            FriendRelationship.addressee_id == current_user.id,
+            FriendRelationship.status == 'accepted'
+        ).all()
+        friend_ids.extend([f.requester_id for f in addressee_friends])
+        
+        # Filter for users who are both project members and friends with current user
+        visible_user_ids = [uid for uid in project_member_ids if uid in friend_ids]
+        
+        # Always include current user's own check-ins
+        visible_user_ids.append(current_user.id)
+        
+        # Now query check-ins from visible users
+        checkins_query = db.session.query(
+            CheckIn, User.username
+        ).join(
+            User, CheckIn.user_id == User.id
+        ).filter(
+            CheckIn.project_id == project.id,
+            CheckIn.user_id.in_(visible_user_ids)
+        )
+    
+    # Order by date and time, descending
+    checkins_query = checkins_query.order_by(
+        CheckIn.check_date.desc(), 
+        CheckIn.check_time.desc()
+    )
+    
+    # Optional pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    pagination = checkins_query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Format data for response
+    result = []
+    for checkin, username in pagination.items:
+        result.append({
+            'id': checkin.id,
+            'user_id': checkin.user_id,
+            'username': username,
+            'date': checkin.check_date.strftime('%Y-%m-%d'),
+            'time': checkin.check_time.strftime('%H:%M'),
+            'note': checkin.note,
+            'location': checkin.location,
+            'is_self': checkin.user_id == current_user.id
+        })
+    
+    return jsonify({
+        'checkins': result,
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': pagination.page
+    })
+
+@checkin.route('/checkin/<int:checkin_id>')
+@login_required
+def view_checkin(checkin_id):
+    """View a specific check-in record with privacy checks"""
+    checkin = CheckIn.query.get_or_404(checkin_id)
+    
+    # Check if user has permission to view this check-in
+    if not can_view_checkin(current_user.id, checkin.user_id, checkin.project_id):
+        flash('You do not have permission to view this check-in', 'danger')
+        return redirect(url_for('checkin.history', project=checkin.project_id))
+    
+    # If authorized, show the check-in details
+    user = User.query.get(checkin.user_id)
+    project = Project.query.get(checkin.project_id)
+    
+    return render_template(
+        'checkin/view_checkin.html',
+        title='Check-in Details',
+        checkin=checkin,
+        user=user,
+        project=project
+    )
 
 def update_project_stats(project_id):
     """更新项目统计数据"""
@@ -382,3 +551,43 @@ def update_user_project_stats(user_id, project_id, utc_today):
     
     user_stats.last_checkin_date = utc_today
     return user_stats
+
+def can_view_checkin(viewer_id, owner_id, project_id):
+    """Determine if a user can view another user's check-ins
+    
+    Visibility criteria:
+    1. Users can always see their own check-ins
+    2. Both users must be members of the project
+    3. Both users must be friends
+    
+    Args:
+        viewer_id: The user trying to view the check-in
+        owner_id: The user who created the check-in
+        project_id: The project ID
+        
+    Returns:
+        bool: True if viewer can see owner's check-ins
+    """
+    # Users can always see their own check-ins
+    if viewer_id == owner_id:
+        return True
+    
+    # Check if both users are members of the project
+    from app.models.models import ProjectMember
+    
+    viewer_is_member = ProjectMember.query.filter_by(
+        user_id=viewer_id, project_id=project_id
+    ).first() is not None
+    
+    owner_is_member = ProjectMember.query.filter_by(
+        user_id=owner_id, project_id=project_id
+    ).first() is not None
+    
+    if not (viewer_is_member and owner_is_member):
+        return False
+    
+    # Check if users are friends
+    from app.models.models import FriendRelationship
+    are_friends = FriendRelationship.are_friends(viewer_id, owner_id)
+    
+    return are_friends

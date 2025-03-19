@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Find Friends - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Find Friends</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('friends.list_friends') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-people"></i> Back to Friends List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Search Users</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('friends.search_users') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="input-group mb-3">
+                        {{ form.search(class="form-control") }}
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-search"></i> {{ form.submit.label.text }}
+                        </button>
+                    </div>
+                </form>
+                
+                {% if search_term %}
+                <hr>
+                <h4>Search Results: "{{ search_term }}"</h4>
+                
+                {% if users %}
+                <div class="list-group mt-3">
+                    {% for user in users %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ user.username }}</strong>
+                            <!-- Removed email display for privacy -->
+                        </div>
+                        <div>
+                            {% if user.relationship_status is none %}
+                                <form action="{{ url_for('friends.send_request', user_id=user.id) }}" method="post">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-person-plus"></i> Add Friend
+                                    </button>
+                                </form>
+                            {% elif user.relationship_status == 'pending' %}
+                                {% if user.is_requester %}
+                                    <span class="badge bg-warning text-dark">Request Sent</span>
+                                {% else %}
+                                    <div class="btn-group">
+                                        <form action="{{ url_for('friends.accept_request', relationship_id=user.relationship.id) }}" method="post">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-success me-1">
+                                                <i class="bi bi-check-lg"></i> Accept
+                                            </button>
+                                        </form>
+                                        <form action="{{ url_for('friends.reject_request', relationship_id=user.relationship.id) }}" method="post">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-x-lg"></i> Reject
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+                            {% elif user.relationship_status == 'accepted' %}
+                                <span class="badge bg-success">Already Friends</span>
+                            {% elif user.relationship_status == 'rejected' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> No matching users found
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

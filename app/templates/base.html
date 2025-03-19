@@ -18,10 +18,10 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">Home</a>
                     </li>
-                    {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('projects.list_projects') }}">Projects</a>
                     </li>
@@ -30,6 +30,21 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('checkin.history') }}">History</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('friends.list_friends') }}">
+                            <i class="bi bi-people"></i> Friends
+                        </a>
+                    </li>
+                    <!-- Add this invitation notification item -->
+                    <li class="nav-item">
+                        {% set invitation_count = current_user.get_pending_invitations_count() %}
+                        <a class="nav-link" href="{{ url_for('projects.my_invitations') }}">
+                            <i class="bi bi-envelope"></i> Invitations
+                            {% if invitation_count %}
+                            <span class="badge bg-danger">{{ invitation_count }}</span>
+                            {% endif %}
+                        </a>
                     </li>
                     {% endif %}
                 </ul>
