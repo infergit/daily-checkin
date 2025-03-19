@@ -11,24 +11,25 @@ projects = Blueprint('projects', __name__)
 @projects.route('/list')
 @login_required
 def list_projects():
-    # Get all user projects in a single query (both created and joined)
-    user_projects = db.session.query(Project, ProjectMember).join(
+    # Get user's created projects
+    created_projects = db.session.query(Project, ProjectMember).join(
         ProjectMember, Project.id == ProjectMember.project_id
     ).filter(
-        ProjectMember.user_id == current_user.id
+        ProjectMember.user_id == current_user.id,
+        Project.creator_id == current_user.id
     ).all()
     
-    # Split projects into created and joined in Python
-    created_projects = []
-    joined_projects = []
+    # Get user's joined projects (with creator information)
+    joined_projects = db.session.query(Project, ProjectMember, User).join(
+        ProjectMember, Project.id == ProjectMember.project_id
+    ).join(
+        User, Project.creator_id == User.id
+    ).filter(
+        ProjectMember.user_id == current_user.id,
+        Project.creator_id != current_user.id
+    ).all()
     
-    for project, member in user_projects:
-        if project.creator_id == current_user.id:
-            created_projects.append((project, member))
-        else:
-            joined_projects.append((project, member))
-    
-    # 获取可通过邀请加入的项目（排除用户已加入的项目）以及创建者信息
+    # Get discoverable projects (exclude already joined ones)
     invitation_projects = db.session.query(Project, User).join(
         User, Project.creator_id == User.id
     ).filter(

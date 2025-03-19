@@ -16,7 +16,7 @@
 
 <div class="row">
     <div class="col-lg-8">
-        <!-- Projects I Created -->
+        <!-- Modified Projects I Created section -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0"><i class="bi bi-person-circle me-2"></i>Projects I Created</h4>
@@ -32,19 +32,24 @@
                                         <i class="bi bi-{{ project.icon }} me-2"></i>
                                         {% endif %}
                                         <strong>{{ project.name }}</strong>
-                                        <span class="badge bg-secondary float-end">{{ membership.role }}</span>
-                                        <span class="badge float-end me-2 {% if project.visibility == 'invitation' %}bg-info{% else %}bg-secondary{% endif %}">
+                                        <span class="badge float-end {% if project.visibility == 'invitation' %}bg-info{% else %}bg-secondary{% endif %}">
                                             {{ project.visibility|capitalize }}
                                         </span>
                                     </div>
                                     <div class="card-body">
-                                        <p class="card-text">{{ project.description|truncate(100) or "No description" }}</p>
-                                        <p class="small text-muted mb-0">
-                                            <i class="bi bi-calendar"></i> Created: {{ project.created_at.strftime('%Y-%m-%d') }}
-                                        </p>
-                                        <p class="small text-muted mb-0">
-                                            <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
-                                        </p>
+                                        <p class="card-text mb-2">{{ project.description|truncate(100) or "No description" }}</p>
+                                        
+                                        <!-- Simplified info section without creator info -->
+                                        <div class="d-flex flex-column flex-md-row justify-content-between">
+                                            <div class="project-info mb-2 mb-md-0">
+                                                <p class="small text-muted mb-1">
+                                                    <i class="bi bi-calendar"></i> Created: {{ project.created_at.strftime('%Y-%m-%d') }}
+                                                </p>
+                                                <p class="small text-muted mb-0">
+                                                    <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="card-footer">
                                         <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">View Details</a>
@@ -68,7 +73,8 @@
             <div class="card-body">
                 {% if joined_projects %}
                     <div class="row row-cols-1 row-cols-md-2 g-4">
-                        {% for project, membership in joined_projects %}
+                        <!-- Projects I Joined section - With simplified header -->
+                        {% for project, membership, creator in joined_projects %}
                             <div class="col">
                                 <div class="card h-100">
                                     <div class="card-header" {% if project.color %}style="background-color: {{ project.color }};"{% endif %}>
@@ -76,16 +82,23 @@
                                         <i class="bi bi-{{ project.icon }} me-2"></i>
                                         {% endif %}
                                         <strong>{{ project.name }}</strong>
-                                        <span class="badge bg-secondary float-end">{{ membership.role }}</span>
+                                        <!-- Removed redundant badges -->
                                     </div>
                                     <div class="card-body">
-                                        <p class="card-text">{{ project.description|truncate(100) or "No description" }}</p>
-                                        <p class="small text-muted mb-0">
-                                            <i class="bi bi-person"></i> Created by: someone else
-                                        </p>
-                                        <p class="small text-muted mb-0">
-                                            <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
-                                        </p>
+                                        <p class="card-text mb-2">{{ project.description|truncate(100) or "No description" }}</p>
+                                        
+                                        <!-- Mobile-friendly creator info -->
+                                        <div class="d-flex flex-column flex-md-row justify-content-between">
+                                            <div class="project-info mb-2 mb-md-0">
+                                                <p class="small text-muted mb-1">
+                                                    <i class="bi bi-person"></i> Created by: <span class="text-nowrap">{{ creator.username }}</span>
+                                                </p>
+                                                <p class="small text-muted mb-0">
+                                                    <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
+                                                </p>
+                                            </div>
+                                            <!-- Removed redundant badges div -->
+                                        </div>
                                     </div>
                                     <div class="card-footer">
                                         <a href="{{ url_for('projects.view_project', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">View Details</a>
@@ -109,7 +122,7 @@
         {% endif %}
     </div>
     
-    <!-- Discoverable Projects (unchanged) -->
+    <!-- Discoverable Projects with consistent card styling -->
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header bg-info text-white">
@@ -117,28 +130,39 @@
             </div>
             <div class="card-body">
                 {% if invitation_projects %}
-                    <div class="list-group">
+                    <div class="row row-cols-1 g-4">
                         {% for project, creator in invitation_projects %}
-                            <div class="list-group-item list-group-item-action">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h5 class="mb-1">
-                                        {% if project.icon %}<i class="bi bi-{{ project.icon }} me-2"></i>{% endif %}
-                                        {{ project.name }}
-                                    </h5>
-                                </div>
-                                <p class="mb-1">{{ project.description|truncate(100) or "No description" }}</p>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-person"></i> Created by: {{ creator.username }}
-                                        <br>
-                                        <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
-                                    </small>
-                                    <form method="POST" action="{{ url_for('projects.join_project', project_id=project.id) }}" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-person-plus"></i> Request to Join
-                                        </button>
-                                    </form>
+                            <div class="col">
+                                <div class="card h-100">
+                                    <!-- Using consistent card header styling -->
+                                    <div class="card-header" {% if project.color %}style="background-color: {{ project.color }};"{% endif %}>
+                                        {% if project.icon %}
+                                        <i class="bi bi-{{ project.icon }} me-2"></i>
+                                        {% endif %}
+                                        <strong>{{ project.name }}</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="card-text mb-2">{{ project.description|truncate(100) or "No description" }}</p>
+                                        
+                                        <div class="d-flex flex-column">
+                                            <div class="project-info mb-2">
+                                                <p class="small text-muted mb-1">
+                                                    <i class="bi bi-person"></i> Created by: <span class="text-nowrap">{{ creator.username }}</span>
+                                                </p>
+                                                <p class="small text-muted mb-0">
+                                                    <i class="bi bi-clock"></i> Check-in: {{ project.frequency_type|capitalize }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <form method="POST" action="{{ url_for('projects.join_project', project_id=project.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                <i class="bi bi-person-plus"></i> Request to Join
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         {% endfor %}
