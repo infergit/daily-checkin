@@ -1,4 +1,10 @@
 # app/__init__.py
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
 from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -7,7 +13,9 @@ from flask_wtf.csrf import CSRFProtect  # Add this import
 from config import Config
 from datetime import timedelta
 import time
-import os
+# Remove these imports since we're not using them yet
+# from app.utils.telegram_bot import configure_telegram_bot
+# import threading
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -69,5 +77,11 @@ def create_app(config_class=Config):
         """Convert UTC datetime to user's timezone"""
         from app.utils.timezone import to_user_timezone as convert_timezone
         return convert_timezone(utc_dt)
+    
+    # Remove the Telegram bot configuration for now
+    # if not app.debug:
+    #     bot = configure_telegram_bot(app)
+    #     if bot:
+    #         threading.Thread(target=bot.polling, kwargs={'none_stop': True}).start()
     
     return app

@@ -30,6 +30,29 @@ class User(db.Model, UserMixin):
             status='pending'
         ).count()
 
+    def get_preference(self, key, default=None):
+        """Get a user preference by key"""
+        pref = UserPreference.query.filter_by(user_id=self.id, key=key).first()
+        return pref.value if pref else default
+
+    def set_preference(self, key, value):
+        """Set a user preference"""
+        pref = UserPreference.query.filter_by(user_id=self.id, key=key).first()
+        if pref:
+            pref.value = str(value)
+        else:
+            pref = UserPreference(user_id=self.id, key=key, value=str(value))
+            db.session.add(pref)
+        db.session.commit()
+
+    def wants_checkin_notifications(self):
+        """Check if user wants to receive check-in notifications"""
+        return self.get_preference('receive_checkin_notifications', 'N') == 'Y'
+
+    def has_valid_telegram(self):
+        """Check if user has a valid Telegram chat ID configured"""
+        return bool(self.get_preference('telegram_chat_id', None))
+
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -207,3 +230,18 @@ class ProjectJoinRequest(db.Model):
     
     def __repr__(self):
         return f'<ProjectJoinRequest project_id={self.project_id} user_id={self.user_id} status={self.status}>'
+
+class UserPreference(db.Model):
+    """Model for storing user preferences as key-value pairs"""
+    __tablename__ = 'user_preferences'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False)  # No foreign key constraint
+    key = db.Column(db.String(64), nullable=False)   # Preference name
+    value = db.Column(db.String(255))                # Preference value as string
+    
+    # Ensure each user has only one entry per preference key
+    __table_args__ = (db.UniqueConstraint('user_id', 'key'),)
+    
+    def __repr__(self):
+        return f'<UserPreference id={self.id} user_id={self.user_id} key={self.key}>'

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}User Settings - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>User Settings</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Notification Preferences</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.receive_checkin_notifications(class="form-check-input") }}
+                        {{ form.receive_checkin_notifications.label(class="form-check-label") }}
+                        <div class="form-text">
+                            When enabled, you'll receive notifications when your friends complete their check-ins via Telegram.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.telegram_chat_id.label(class="form-label") }}
+                        {{ form.telegram_chat_id(class="form-control") }}
+                        <div class="form-text">
+                            <div class="alert alert-info">
+                                <strong>Two steps are required to receive notifications:</strong>
+                            </div>
+                            
+                            <ol>
+                                <li><strong>Get your Chat ID:</strong>
+                                    <ul>
+                                        <li>Message <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a></li>
+                                        <li>Send <code>/start</code> to it</li>
+                                        <li>Copy your ID and paste it above</li>
+                                    </ul>
+                                </li>
+                                <li><strong>Add our notification bot:</strong>
+                                    <ul>
+                                        <li>Add <a href="https://t.me/{{ config.TELEGRAM_BOT_USERNAME }}" target="_blank">@{{ config.TELEGRAM_BOT_USERNAME }}</a> to your Telegram contacts</li>
+                                        <li>Send <code>/start</code> to our bot</li>
+                                        <li>This step is required to receive notifications!</li>
+                                    </ul>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

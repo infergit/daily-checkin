@@ -1,7 +1,7 @@
 # app/auth/forms.py
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
-from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError
+from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional
 from app.models.models import User
 
 class RegistrationForm(FlaskForm):
@@ -26,3 +26,9 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     remember = BooleanField('Remember Me')
     submit = SubmitField('Login')
+
+class UserSettingsForm(FlaskForm):
+    """Form for user settings"""
+    receive_checkin_notifications = BooleanField('Receive check-in notifications from friends')
+    telegram_chat_id = StringField('Telegram Chat ID', validators=[Optional()])
+    submit = SubmitField('Save Settings')

@@ -1,5 +1,5 @@
 # app/checkin/routes.py
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta  # 添加 timedelta 导入
 from app import db
@@ -7,6 +7,7 @@ from app.models.models import CheckIn, Project, ProjectMember, ProjectStat, User
 from app.checkin.forms import CheckInForm, ProjectSelectForm
 from app.utils.timezone import get_user_timezone, to_user_timezone
 import pytz
+from app.utils.telegram_utils import notify_friends_of_checkin  # Import the notification function
 
 checkin = Blueprint('checkin', __name__)
 
@@ -79,7 +80,15 @@ def dashboard():
                 location=None  # 可以在后续版本中添加位置功能
             )
             db.session.add(checkin)
-            
+            db.session.commit()
+
+            # Notify friends (after successful database commit)
+            try:
+                notify_friends_of_checkin(current_user, project, checkin)
+            except Exception as e:
+                # Log error but don't interrupt the check-in process
+                current_app.logger.error(f"Failed to send check-in notifications: {str(e)}")
+
             # 更新项目统计
             update_project_stats(project.id)
             # 更新用户项目统计 - pass UTC date

@@ -3,7 +3,8 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, current_user
 from app import db
 from app.models.models import User
-from app.auth.forms import RegistrationForm, LoginForm
+from app.auth.forms import RegistrationForm, LoginForm, UserSettingsForm
+from flask_login import login_required
 
 auth = Blueprint('auth', __name__)
 
@@ -44,3 +45,27 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+@auth.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    """User settings page"""
+    form = UserSettingsForm()
+    
+    if form.validate_on_submit():
+        # Set notification preference
+        notification_value = 'Y' if form.receive_checkin_notifications.data else 'N'
+        current_user.set_preference('receive_checkin_notifications', notification_value)
+        
+        # Set Telegram chat ID if provided
+        if form.telegram_chat_id.data:
+            current_user.set_preference('telegram_chat_id', form.telegram_chat_id.data)
+        
+        flash('Your settings have been updated!', 'success')
+        return redirect(url_for('auth.settings'))
+    elif request.method == 'GET':
+        # Set form defaults from current preferences
+        form.receive_checkin_notifications.data = current_user.get_preference('receive_checkin_notifications', 'N') == 'Y'
+        form.telegram_chat_id.data = current_user.get_preference('telegram_chat_id')
+    
+    return render_template('auth/settings.html', title='User Settings', form=form)

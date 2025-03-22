@@ -7,3 +7,10 @@ wtforms==3.1.0
 werkzeug==2.3.7
 email-validator==2.0.0
 pytz==2024.1  # Added for timezone support
+
+# Telegram bot support
+pyTelegramBotAPI==4.14.0
+requests==2.31.0
+
+# Environment configuration
+python-dotenv==1.0.0
