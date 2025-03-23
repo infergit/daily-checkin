@@ -485,6 +485,68 @@ def view_checkin(checkin_id):
         project=project
     )
 
+@checkin.route('/timeline')
+@login_required
+def timeline():
+    # Get all projects the user has access to through ProjectMember
+    project_ids = db.session.query(ProjectMember.project_id).filter(
+        ProjectMember.user_id == current_user.id
+    ).all()
+    project_ids = [p.project_id for p in project_ids]
+    
+    user_projects = Project.query.filter(Project.id.in_(project_ids)).all()
+    
+    # Get check-ins with pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = 20  # Number of check-ins per page
+    
+    # Get all check-ins for these projects with pagination
+    checkins_pagination = CheckIn.query.filter(
+        CheckIn.project_id.in_(project_ids),
+        CheckIn.user_id == current_user.id
+    ).order_by(
+        CheckIn.check_date.desc(),
+        CheckIn.check_time.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Get user timezone settings
+    today = datetime.now(pytz.UTC).date()
+    yesterday = today - timedelta(days=1)
+    start_of_week = today - timedelta(days=today.weekday())
+    
+    grouped_checkins = {
+        'today': [],
+        'yesterday': [],
+        'this_week': [],
+        'earlier': []
+    }
+    
+    # Apply timezone conversion to all check-ins
+    for checkin in checkins_pagination.items:
+        # Convert check_time to local time
+        checkin.check_time = to_user_timezone(checkin.check_time)
+        # Add display_date attribute for template use
+        checkin.display_date = to_user_timezone(
+            datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
+        ).date()
+        
+        # Use the display_date (localized date) for grouping
+        if checkin.display_date == today:
+            grouped_checkins['today'].append(checkin)
+        elif checkin.display_date == yesterday:
+            grouped_checkins['yesterday'].append(checkin)
+        elif checkin.display_date >= start_of_week:
+            grouped_checkins['this_week'].append(checkin)
+        else:
+            grouped_checkins['earlier'].append(checkin)
+    
+    return render_template(
+        'checkin/timeline.html', 
+        grouped_checkins=grouped_checkins, 
+        projects={p.id: p for p in user_projects},
+        pagination=checkins_pagination
+    )
+
 def update_project_stats(project_id):
     """更新项目统计数据"""
     stats = ProjectStat.query.filter_by(project_id=project_id).first()
