@@ -25,8 +25,13 @@ def dashboard():
         flash('You need to join or create a project first.', 'info')
         return redirect(url_for('projects.list_projects'))
     
-    # 默认选择第一个项目，或者从URL参数获取
+    # get project_id from request or get the default project
     project_id = request.args.get('project', type=int)
+    if project_id is None:
+        default_project_id = current_user.get_preference('default_project_id', '')
+        if default_project_id:
+            project_id = int(default_project_id)
+
     if project_id is None and projects:
         project_id = projects[0].id
     

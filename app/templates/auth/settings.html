@@ -11,14 +11,15 @@
 
 <div class="row">
     <div class="col-md-8 mx-auto">
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <h3 class="card-title mb-0">Notification Preferences</h3>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="">
-                    {{ form.hidden_tag() }}
-                    
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            
+            <!-- Notification Preferences Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Notification Preferences</h3>
+                </div>
+                <div class="card-body">
                     <div class="mb-3 form-check">
                         {{ form.receive_checkin_notifications(class="form-check-input") }}
                         {{ form.receive_checkin_notifications.label(class="form-check-label") }}
@@ -53,13 +54,34 @@
                             </ol>
                         </div>
                     </div>
-                    
-                    <div class="d-grid mt-4">
-                        {{ form.submit(class="btn btn-primary") }}
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
+            
+            <!-- Default Project Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="card-title mb-0">Default Project</h3>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="default_project_id" class="form-label">Default Project</label>
+                        <select name="default_project_id" id="default_project_id" class="form-select">
+                            <option value="">-- No Default --</option>
+                            {% for project in projects %}
+                                <option value="{{ project.id }}" {% if project.id|string == default_project_id %}selected{% endif %}>
+                                    {% if project.icon %}<i class="bi bi-{{ project.icon }}"></i> {% endif %}{{ project.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select your default project for check-in pages</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid mt-4">
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

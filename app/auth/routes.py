@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, current_user
 from app import db
-from app.models.models import User
+from app.models.models import User, Project, ProjectMember
 from app.auth.forms import RegistrationForm, LoginForm, UserSettingsForm
 from flask_login import login_required
 
@@ -52,6 +52,13 @@ def settings():
     """User settings page"""
     form = UserSettingsForm()
     
+    # Get user's projects for default project selection
+    projects = db.session.query(Project).join(
+        ProjectMember, Project.id == ProjectMember.project_id
+    ).filter(
+        ProjectMember.user_id == current_user.id
+    ).all()
+    
     if form.validate_on_submit():
         # Set notification preference
         notification_value = 'Y' if form.receive_checkin_notifications.data else 'N'
@@ -61,6 +68,10 @@ def settings():
         if form.telegram_chat_id.data:
             current_user.set_preference('telegram_chat_id', form.telegram_chat_id.data)
         
+        # Set default project if provided
+        default_project = request.form.get('default_project_id', '')
+        current_user.set_preference('default_project_id', default_project)
+        
         flash('Your settings have been updated!', 'success')
         return redirect(url_for('auth.settings'))
     elif request.method == 'GET':
@@ -68,4 +79,13 @@ def settings():
         form.receive_checkin_notifications.data = current_user.get_preference('receive_checkin_notifications', 'N') == 'Y'
         form.telegram_chat_id.data = current_user.get_preference('telegram_chat_id')
     
-    return render_template('auth/settings.html', title='User Settings', form=form)
+    # Get current default project
+    default_project_id = current_user.get_preference('default_project_id', '')
+    
+    return render_template(
+        'auth/settings.html', 
+        title='User Settings', 
+        form=form, 
+        projects=projects,
+        default_project_id=default_project_id
+    )
