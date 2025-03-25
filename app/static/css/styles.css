@@ -23,3 +23,13 @@ main {
 .preserve-newlines {
     white-space: pre-line !important;
 }
+.input-group-text {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #6c757d;
+}
+
+/* Make the @ symbol stand out more */
+.input-group-text {
+    font-size: 1.1rem;
+}
