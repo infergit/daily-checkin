@@ -2,7 +2,7 @@ import requests
 import logging
 import threading
 from flask import current_app
-from app.models.models import FriendRelationship, User
+from app.models.models import FriendRelationship, User, ProjectMember
 from app.utils.timezone import to_user_timezone
 
 logger = logging.getLogger(__name__)
@@ -106,9 +106,16 @@ def notify_friends_of_checkin(user, project, checkin):
         else:
             friend_ids.append(rel.requester_id)
     
+    # Get all users who are members of this project
+    project_member_ids = [member.user_id for member in 
+                          ProjectMember.query.filter_by(project_id=project.id).all()]
+    
+    # Find friends who are also members of the same project
+    eligible_friend_ids = [fid for fid in friend_ids if fid in project_member_ids]
+    
     # Find friends who want notifications and have a valid Telegram chat ID
     notification_sent = 0
-    for friend_id in friend_ids:
+    for friend_id in eligible_friend_ids:
         try:
             friend = User.query.get(friend_id)
             if not friend:
