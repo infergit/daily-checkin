@@ -5,14 +5,10 @@
 
 {% block content %}
 <div class="row mb-3">
-    <div class="col-md-8">
+    <div class="col-md-12">
         <h2>Dashboard</h2>
     </div>
-    <div class="col-md-4">
-        {% with url=url_for('checkin.dashboard') %}
-            {% include "checkin/partials/project_selector.html" %}
-        {% endwith %}
-    </div>
+    <!-- Removed the project selector from here -->
 </div>
 
 <div class="row">
@@ -42,8 +38,20 @@
                                 <div class="text-danger">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="d-grid">
-                            {{ form.submit(class="btn btn-primary") }}
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="flex-grow-1">
+                                <select name="project_id" id="project_id" class="form-select" aria-label="Select project">
+                                    {% for p in projects %}
+                                        <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>
+                                            {% if p.icon %}<i class="bi bi-{{ p.icon }}"></i> {% endif %}{{ p.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <button type="button" id="checkin-btn" class="btn btn-primary">Check In</button>
+                                {{ form.submit(class="d-none") }}
+                            </div>
                         </div>
                     </form>
                 {% endif %}
@@ -51,7 +59,7 @@
         </div>
         
         <!-- MOVED: Recent Check-ins moved here for better mobile display -->
-        <div class="card mb-4">
+        <div class="card mb-4" id="recent-checkins-card">
             <div class="card-header bg-info text-white">
                 <h4 class="mb-0">Recent Check-ins</h4>
             </div>
@@ -104,4 +112,10 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}  <!-- This keeps any scripts from the parent template -->
+<!-- Remove the line below since dashboard.js is now merged into main.js -->
+<!-- <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script> -->
 {% endblock %}

@@ -20,6 +20,137 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // DASHBOARD CODE START - Merged from dashboard.js
+    // Reference to important dashboard elements
+    const projectTitle = document.querySelector('.card-header h3');
+    const cardHeader = document.querySelector('.card-header');
+    const projectSelect = document.getElementById('project_id');
+    const noteField = document.getElementById('note');
+    const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+    const checkinBtn = document.getElementById('checkin-btn');
+    const checkinForm = document.querySelector('form');
+    
+    // Set up project selection change event
+    if (projectSelect) {
+        projectSelect.addEventListener('change', function() {
+            const selectedProjectId = this.value;
+            // Load project details
+            loadProjectDetails(selectedProjectId);
+            // Also update recent check-ins for the selected project
+            updateRecentCheckins(selectedProjectId);
+        });
+    }
+    
+    // Handle check-in submission
+    if (checkinBtn) {
+        checkinBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            if (!noteField.value.trim()) {
+                // Show warning in the correct style
+                showFlashMessage('<div class="alert alert-warning">Please enter a note for your check-in</div>');
+                return;
+            }
+            
+            // Make AJAX request to submit check-in
+            fetch('/checkin/api/checkin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    project_id: projectSelect.value,
+                    note: noteField.value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message in the same style as project creation
+                    showFlashMessage('<div class="alert alert-success">Check-in successful!</div>');
+                    
+                    // Clear the note field for next check-in
+                    noteField.value = '';
+                    
+                    // Fetch updated recent check-ins
+                    updateRecentCheckins(projectSelect.value);
+                } else {
+                    showFlashMessage(`<div class="alert alert-danger">Error: ${data.message}</div>`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showFlashMessage('<div class="alert alert-danger">There was an error processing your check-in</div>');
+            });
+        });
+    }
+    
+    // Function to display flash messages as centered floating overlays
+    function showFlashMessage(htmlContent) {
+        // Create overlay container if it doesn't exist
+        let overlayContainer = document.getElementById('message-overlay');
+        if (!overlayContainer) {
+            // Create semi-transparent overlay
+            overlayContainer = document.createElement('div');
+            overlayContainer.id = 'message-overlay';
+            
+            // Style the overlay to cover the entire screen with center alignment
+            Object.assign(overlayContainer.style, {
+                position: 'fixed',
+                top: '0',
+                left: '0',
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                zIndex: '9999',
+                pointerEvents: 'none' // Allow clicking through the overlay
+            });
+            
+            document.body.appendChild(overlayContainer);
+        }
+        
+        // Create a message box
+        const messageBox = document.createElement('div');
+        messageBox.style.pointerEvents = 'auto'; // Make the message clickable
+        messageBox.style.minWidth = '300px';
+        messageBox.style.maxWidth = '80%';
+        messageBox.innerHTML = htmlContent;
+        
+        // Add the message to the overlay
+        overlayContainer.appendChild(messageBox);
+        
+        // Make sure the alert has the dismiss button
+        const alertDiv = messageBox.querySelector('.alert');
+        if (alertDiv && !alertDiv.querySelector('.btn-close')) {
+            alertDiv.classList.add('alert-dismissible', 'fade', 'show');
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close';
+            closeButton.setAttribute('aria-label', 'Close');
+            
+            // Add click handler to remove the entire overlay when close is clicked
+            closeButton.addEventListener('click', function() {
+                if (overlayContainer.parentNode) {
+                    overlayContainer.remove();
+                }
+            });
+            
+            alertDiv.appendChild(closeButton);
+        }
+        
+        // Setup automatic dismissal after 3 seconds
+        setTimeout(() => {
+            if (overlayContainer.parentNode) {
+                overlayContainer.remove();
+            }
+        }, 3000);
+    }
+    // DASHBOARD CODE END
+    
     // Handle view toggle for check-in history
     const viewToggleButtons = document.querySelectorAll('.view-toggle');
     if (viewToggleButtons && viewToggleButtons.length > 0) {
@@ -204,6 +335,130 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Other existing event handlers...
 });
+
+// Function to load project details via AJAX - moved outside the DOM ready event
+function loadProjectDetails(projectId) {
+    fetch(`/checkin/api/project/${projectId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update project title and icon
+                const projectTitle = document.querySelector('.card-header h3');
+                if (projectTitle) {
+                    projectTitle.innerHTML = '';
+                    
+                    if (data.project.icon) {
+                        const icon = document.createElement('i');
+                        icon.className = `bi bi-${data.project.icon} me-2`;
+                        projectTitle.appendChild(icon);
+                    }
+                    
+                    projectTitle.appendChild(document.createTextNode(data.project.name));
+                }
+                
+                // Update header color if available
+                const cardHeader = document.querySelector('.card-header');
+                if (cardHeader && data.project.color) {
+                    cardHeader.style.backgroundColor = data.project.color;
+                } else if (cardHeader) {
+                    cardHeader.style.backgroundColor = '';
+                }
+            } else {
+                console.error('Error loading project details:', data.message);
+                showFlashMessage('<div class="alert alert-danger">Error loading project details: ' + (data.message || '') + '</div>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showFlashMessage('<div class="alert alert-danger">Failed to connect to server when loading project details</div>');
+        });
+}
+
+// Function to update recent check-ins - moved outside the DOM ready event
+function updateRecentCheckins(projectId) {
+    console.log('Updating recent check-ins for project:', projectId);
+    
+    fetch(`/checkin/api/recent-checkins/${projectId}`)
+        .then(response => {
+            console.log('Recent check-ins response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Recent check-ins data:', data);
+            
+            if (data.success) {
+                // Find the recent check-ins container using a more reliable selector
+                const recentCheckinHeaders = document.querySelectorAll('.card-header h4');
+                const recentCheckinsCard = document.getElementById('recent-checkins-card');
+                
+                if (!recentCheckinsCard) {
+                    console.error('Could not find Recent Check-ins card');
+                    return;
+                }
+                
+                const cardBody = recentCheckinsCard.querySelector('.card-body');
+                if (!cardBody) {
+                    console.error('Could not find card body within Recent Check-ins card');
+                    return;
+                }
+                
+                // Save the existing history link if it exists
+                const historyLink = cardBody.querySelector('a[href*="history"]');
+                let historyLinkHtml = '';
+                
+                // Get the correct URL format from the existing link or create a reasonable default
+                let historyUrl = '';
+                if (historyLink) {
+                    // Extract the base URL structure from the existing link
+                    const currentHref = historyLink.getAttribute('href');
+                    // Check if it uses query parameters (?project=) or path parameters (/project/)
+                    if (currentHref.includes('?')) {
+                        // Query parameter style URL
+                        const baseUrl = currentHref.split('?')[0];
+                        historyUrl = `${baseUrl}?project=${projectId}`;
+                    } else {
+                        // It might be using a path parameter
+                        historyUrl = `/checkin/history?project=${projectId}`;
+                    }
+                    historyLinkHtml = `<div class="mt-3 text-center"><a href="${historyUrl}" class="btn btn-sm btn-outline-primary">View Full History</a></div>`;
+                } else {
+                    // Default to query parameter style which is more common in Flask
+                    historyUrl = `/checkin/history?project=${projectId}`;
+                    historyLinkHtml = `<div class="mt-3 text-center"><a href="${historyUrl}" class="btn btn-sm btn-outline-primary">View Full History</a></div>`;
+                }
+                
+                if (data.recent_checkins && data.recent_checkins.length > 0) {
+                    // We have check-ins to display
+                    let html = '<ul class="list-group">';
+                    
+                    data.recent_checkins.forEach(check => {
+                        html += `
+                            <li class="list-group-item">
+                                <strong>${check.check_time}</strong>
+                                <p class="mb-0 small text-muted preserve-newlines">${check.note || ''}</p>
+                            </li>
+                        `;
+                    });
+                    
+                    html += '</ul>';
+                    html += historyLinkHtml;
+                    
+                    cardBody.innerHTML = html;
+                } else {
+                    // No check-ins
+                    let html = '<p class="text-center">No recent check-ins yet.</p>';
+                    html += historyLinkHtml;
+                    
+                    cardBody.innerHTML = html;
+                }
+            } else {
+                console.error('Error fetching recent check-ins:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating recent check-ins:', error);
+        });
+}
 
 // Simple toast notification function
 function showToast(message, type = 'info') {

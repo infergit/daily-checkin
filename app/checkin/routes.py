@@ -488,6 +488,9 @@ def view_checkin(checkin_id):
 @checkin.route('/timeline')
 @login_required
 def timeline():
+    # Add form creation code at beginning of the function
+    form = CheckInForm()
+    
     # Get all projects the user has access to through ProjectMember
     project_ids = db.session.query(ProjectMember.project_id).filter(
         ProjectMember.user_id == current_user.id
@@ -495,6 +498,23 @@ def timeline():
     project_ids = [p.project_id for p in project_ids]
     
     user_projects = Project.query.filter(Project.id.in_(project_ids)).all()
+    
+    # Get the selected project or default to first project
+    project_id = request.args.get('project', type=int)
+    if not project_id and user_projects:
+        project_id = user_projects[0].id
+    
+    project = Project.query.get(project_id) if project_id else None
+    
+    # Check if already checked in today for the selected project
+    today = datetime.now(pytz.UTC).date()
+    already_checked_in = False
+    if project and project.frequency_type == 'daily':
+        already_checked_in = CheckIn.query.filter(
+            CheckIn.user_id == current_user.id,
+            CheckIn.project_id == project.id,
+            CheckIn.check_date == today
+        ).first() is not None
     
     # Get check-ins with pagination
     page = request.args.get('page', 1, type=int)
@@ -544,7 +564,10 @@ def timeline():
         'checkin/timeline.html', 
         grouped_checkins=grouped_checkins, 
         projects={p.id: p for p in user_projects},
-        pagination=checkins_pagination
+        project=project,
+        pagination=checkins_pagination,
+        form=form,
+        already_checked_in=already_checked_in
     )
 
 def update_project_stats(project_id):
@@ -662,3 +685,165 @@ def can_view_checkin(viewer_id, owner_id, project_id):
     are_friends = FriendRelationship.are_friends(viewer_id, owner_id)
     
     return are_friends
+
+@checkin.route('/api/project/<int:project_id>', methods=['GET'])
+@login_required
+def get_project_details(project_id):
+    # Check if user has access to this project
+    is_member = ProjectMember.query.filter_by(
+        user_id=current_user.id,
+        project_id=project_id
+    ).first() is not None
+    
+    if not is_member:
+        return jsonify({
+            'success': False,
+            'message': 'Project not found or you don\'t have access'
+        }), 404
+    
+    project = Project.query.get_or_404(project_id)
+    
+    return jsonify({
+        'success': True,
+        'project': {
+            'id': project.id,
+            'name': project.name,
+            'icon': project.icon,
+            'color': project.color
+        }
+    })
+
+@checkin.route('/api/checkin', methods=['POST'])
+@login_required
+def ajax_checkin():
+    # Only accept JSON requests
+    if not request.is_json:
+        return jsonify({
+            'success': False,
+            'message': 'Invalid request format'
+        }), 400
+    
+    data = request.json
+    project_id = data.get('project_id')
+    note = data.get('note', '')
+    
+    # Validate project access
+    project = Project.query.get_or_404(project_id)
+    is_member = ProjectMember.query.filter_by(
+        user_id=current_user.id,
+        project_id=project_id
+    ).first() is not None
+    
+    if not is_member:
+        return jsonify({
+            'success': False,
+            'message': 'You don\'t have access to this project'
+        }), 403
+    
+    # Get current time in UTC and user's local timezone
+    now_utc = datetime.now(pytz.UTC)
+    local_now = to_user_timezone(now_utc)
+    user_today = local_now.date()
+
+    # Check for existing check-in today
+    start_of_day_local = datetime.combine(user_today, datetime.min.time())
+    end_of_day_local = datetime.combine(user_today, datetime.max.time())
+
+    user_tz = get_user_timezone()
+    start_of_day_utc = user_tz.localize(start_of_day_local).astimezone(pytz.UTC)
+    end_of_day_utc = user_tz.localize(end_of_day_local).astimezone(pytz.UTC)
+
+    today_checkin = CheckIn.query.filter(
+        CheckIn.user_id == current_user.id,
+        CheckIn.project_id == project.id,
+        CheckIn.check_time >= start_of_day_utc,
+        CheckIn.check_time <= end_of_day_utc
+    ).first()
+    
+    if project.frequency_type == 'daily' and today_checkin:
+        return jsonify({
+            'success': False,
+            'message': 'You have already checked in today for this project'
+        }), 400
+    
+    # Create new check-in
+    checkin = CheckIn(
+        user_id=current_user.id,
+        project_id=project.id,
+        check_date=now_utc.date(),
+        check_time=now_utc,
+        note=note,
+        location=None
+    )
+    
+    db.session.add(checkin)
+    
+    try:
+        db.session.commit()
+        
+        # Notify friends
+        try:
+            notify_friends_of_checkin(current_user, project, checkin)
+        except Exception as e:
+            current_app.logger.error(f"Failed to send check-in notifications: {str(e)}")
+        
+        # Update project stats
+        update_project_stats(project.id)
+        # Update user project stats
+        update_user_project_stats(current_user.id, project.id, now_utc.date())
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Check-in successful',
+            'checkin_id': checkin.id
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error during check-in: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while processing your check-in'
+        }), 500
+
+@checkin.route('/api/recent-checkins/<int:project_id>', methods=['GET'])
+@login_required
+def get_recent_checkins(project_id):
+    # Verify user has access to this project
+    is_member = ProjectMember.query.filter_by(
+        user_id=current_user.id,
+        project_id=project_id
+    ).first() is not None
+    
+    if not is_member:
+        return jsonify({
+            'success': False,
+            'message': 'Project not found or you don\'t have access'
+        }), 404
+    
+    # Get 5 most recent check-ins for this project
+    recent_checkins = CheckIn.query.filter_by(
+        project_id=project_id,
+        user_id=current_user.id
+    ).order_by(CheckIn.check_time.desc()).limit(5).all()
+    
+    # Format the check-ins as JSON with proper timezone conversion
+    checkins_json = []
+    user_tz = get_user_timezone()  # Get the user's timezone
+    
+    for check in recent_checkins:
+        # Convert UTC time to user's local timezone
+        local_time = check.check_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+        formatted_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        checkins_json.append({
+            'id': check.id,
+            'check_time': formatted_time,
+            'note': check.note
+        })
+    
+    return jsonify({
+        'success': True,
+        'recent_checkins': checkins_json
+    })
