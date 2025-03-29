@@ -30,7 +30,7 @@ def dashboard():
     project_id = request.args.get('project', type=int)
     if project_id is None:
         default_project_id = current_user.get_preference('default_project_id', '')
-        if default_project_id:
+        if (default_project_id):
             project_id = int(default_project_id)
 
     if project_id is None and projects:
@@ -261,7 +261,7 @@ def history():
     
     # Convert UTC times to local times before passing to template
     for checkin_tuple in checkins.items:
-        checkin = checkin_tuple[0]  # 因为这里返回的是 (CheckIn, username) 元组
+        checkin = checkin_tuple[0]  # Because this returns a (CheckIn, username) tuple
         # Convert check_time to local time
         checkin.check_time = to_user_timezone(checkin.check_time)
         # Add display_date attribute for template use
@@ -269,14 +269,19 @@ def history():
             datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
         ).date()
     
-    # 检查是否是AJAX请求
+    # Create S3 service for the template
+    from app.services.s3_service import S3Service
+    s3_service = S3Service()
+    
+    # Check if this is an AJAX request
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({
             'success': True,
             'html': render_template('checkin/partials/history_table.html', 
                                    checkins=checkins,
                                    view_mode=view_mode,
-                                   project=project)
+                                   project=project,
+                                   s3_service=s3_service)
         })
     
     return render_template(
@@ -286,7 +291,8 @@ def history():
         project_select_form=project_select_form,
         checkins=checkins,
         view_mode=view_mode,
-        project_stats=project_stats
+        project_stats=project_stats,
+        s3_service=s3_service
     )
 
 @checkin.route('/delete_checkin/<int:checkin_id>', methods=['POST'])
@@ -581,6 +587,10 @@ def timeline():
         else:
             grouped_checkins['earlier'].append(checkin)
     
+    # Create S3 service for the template
+    from app.services.s3_service import S3Service
+    s3_service = S3Service()
+    
     return render_template(
         'checkin/timeline.html', 
         grouped_checkins=grouped_checkins, 
@@ -588,7 +598,8 @@ def timeline():
         project=project,
         pagination=checkins_pagination,
         form=form,
-        already_checked_in=already_checked_in
+        already_checked_in=already_checked_in,
+        s3_service=s3_service  # Add S3 service for image URLs
     )
 
 def update_project_stats(project_id):
@@ -912,6 +923,7 @@ def ajax_checkin():
 @checkin.route('/api/recent-checkins/<int:project_id>', methods=['GET'])
 @login_required
 def get_recent_checkins(project_id):
+    """API endpoint to get recent check-ins for a project"""
     # Verify user has access to this project
     is_member = ProjectMember.query.filter_by(
         user_id=current_user.id,
@@ -939,10 +951,26 @@ def get_recent_checkins(project_id):
         local_time = check.check_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
         formatted_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
         
+        # Add image information
+        images_json = []
+        if check.has_images():
+            for image in check.images:
+                # Generate the thumbnail URL through S3 service
+                s3_service = S3Service()
+                thumbnail_url = s3_service.get_thumbnail_url(image.s3_key)
+                
+                images_json.append({
+                    'id': image.id,
+                    's3_key': image.s3_key,
+                    'thumbnail_url': thumbnail_url
+                })
+        
         checkins_json.append({
             'id': check.id,
             'check_time': formatted_time,
-            'note': check.note
+            'note': check.note,
+            'has_images': check.has_images(),
+            'images': images_json
         })
     
     return jsonify({

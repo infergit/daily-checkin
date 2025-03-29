@@ -25,6 +25,20 @@
                         <!-- Main content: Check-in note -->
                         <p class="mb-3 preserve-newlines">{{ checkin.note | truncate(200) }}</p>
                         
+                        <!-- Display images if the check-in has them -->
+                        {% if checkin.has_images() %}
+                        <div class="mt-2 mb-3">
+                            <div class="check-in-gallery">
+                                {% for image in checkin.images %}
+                                <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="gallery-image-link">
+                                    {% set thumbnail_url = s3_service.get_thumbnail_url(image.s3_key) %}
+                                    <img src="{{ thumbnail_url }}" alt="Check-in image" class="gallery-image">
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
                         <!-- Metadata with styled background -->
                         <div class="d-flex align-items-center small text-muted p-2 rounded" style="background-color: #f8f9fa; border: 1px solid #eaecef;">
                             <span>{{ checkin.display_date.strftime('%Y-%m-%d') }} {{ checkin.check_time.strftime('%H:%M') }}</span>
@@ -89,4 +103,14 @@
     </nav>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Enhance any image galleries in the timeline
+        enhanceCheckInGalleries();
+    });
+</script>
 {% endblock %}

@@ -175,88 +175,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Function to attach delete listeners (called on initial load and after view switch)
-    function attachDeleteListeners() {
-        const deleteForms = document.querySelectorAll('.delete-checkin-form');
-        if (deleteForms && deleteForms.length > 0) {
-            deleteForms.forEach(form => {
-                // Remove existing listeners to avoid duplicates
-                const newForm = form.cloneNode(true);
-                form.parentNode.replaceChild(newForm, form);
-                
-                newForm.addEventListener('submit', function(e) {
-                    // Prevent the default form submission
-                    e.preventDefault();
-                    
-                    // Show confirmation dialog
-                    if (confirm('Are you sure you want to delete this check-in?')) {
-                        // If confirmed, submit the form programmatically as POST
-                        const formData = new FormData(newForm);
-                        
-                        fetch(newForm.action, {
-                            method: 'POST',
-                            body: formData,
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                // Try to find parent element (could be a table row or a card)
-                                const row = newForm.closest('tr') || newForm.closest('.card');
-                                
-                                if (row) {
-                                    // Optional: Add fade-out animation
-                                    row.style.transition = 'opacity 0.3s';
-                                    row.style.opacity = '0';
-                                    
-                                    // Remove the row after animation completes
-                                    setTimeout(() => {
-                                        row.remove();
-                                        
-                                        // Check if table/container is now empty
-                                        const container = document.querySelector('tbody') || document.querySelector('.d-md-none');
-                                        
-                                        if ((container && container.children.length === 0) || 
-                                            (container.tagName === 'TBODY' && container.querySelectorAll('tr').length === 0)) {
-                                            
-                                            // Replace with "no records" message
-                                            const tableContainer = document.querySelector('.table-responsive');
-                                            if (tableContainer) {
-                                                tableContainer.innerHTML = `
-                                                    <div class="text-center py-4">
-                                                        <p class="text-muted">No check-in records found for this project.</p>
-                                                        <a href="${data.dashboardUrl}" class="btn btn-primary mt-2">
-                                                            <i class="bi bi-check-circle"></i> Check In Now
-                                                        </a>
-                                                    </div>
-                                                `;
-                                            }
-                                        }
-                                        
-                                        // Show success message
-                                        showToast('Check-in deleted successfully', 'success');
-                                    }, 300);
-                                } else {
-                                    // If we couldn't find the parent element, just reload the page
-                                    showToast('Check-in deleted successfully. Refreshing...', 'success');
-                                    setTimeout(() => window.location.reload(), 1000);
-                                }
-                            } else {
-                                showToast(data.message || 'An error occurred', 'danger');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            showToast('Failed to delete check-in', 'danger');
-                        });
-                    }
-                });
-            });
-        }
-    }
-    
     // Initial attachment of delete listeners
     attachDeleteListeners();
 
@@ -339,16 +257,10 @@ function updateRecentCheckins(projectId) {
     console.log('Updating recent check-ins for project:', projectId);
     
     fetch(`/checkin/api/recent-checkins/${projectId}`)
-        .then(response => {
-            console.log('Recent check-ins response status:', response.status);
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('Recent check-ins data:', data);
-            
             if (data.success) {
-                // Find the recent check-ins container using a more reliable selector
-                const recentCheckinHeaders = document.querySelectorAll('.card-header h4');
+                // Find the recent check-ins container
                 const recentCheckinsCard = document.getElementById('recent-checkins-card');
                 
                 if (!recentCheckinsCard) {
@@ -364,28 +276,8 @@ function updateRecentCheckins(projectId) {
                 
                 // Save the existing history link if it exists
                 const historyLink = cardBody.querySelector('a[href*="history"]');
-                let historyLinkHtml = '';
-                
-                // Get the correct URL format from the existing link or create a reasonable default
-                let historyUrl = '';
-                if (historyLink) {
-                    // Extract the base URL structure from the existing link
-                    const currentHref = historyLink.getAttribute('href');
-                    // Check if it uses query parameters (?project=) or path parameters (/project/)
-                    if (currentHref.includes('?')) {
-                        // Query parameter style URL
-                        const baseUrl = currentHref.split('?')[0];
-                        historyUrl = `${baseUrl}?project=${projectId}`;
-                    } else {
-                        // It might be using a path parameter
-                        historyUrl = `/checkin/history?project=${projectId}`;
-                    }
-                    historyLinkHtml = `<div class="mt-3 text-center"><a href="${historyUrl}" class="btn btn-sm btn-outline-primary">View Full History</a></div>`;
-                } else {
-                    // Default to query parameter style which is more common in Flask
-                    historyUrl = `/checkin/history?project=${projectId}`;
-                    historyLinkHtml = `<div class="mt-3 text-center"><a href="${historyUrl}" class="btn btn-sm btn-outline-primary">View Full History</a></div>`;
-                }
+                let historyUrl = historyLink ? historyLink.getAttribute('href') : `/checkin/history?project=${projectId}`;
+                let historyLinkHtml = `<div class="mt-3 text-center"><a href="${historyUrl}" class="btn btn-sm btn-outline-primary">View Full History</a></div>`;
                 
                 if (data.recent_checkins && data.recent_checkins.length > 0) {
                     // We have check-ins to display
@@ -395,15 +287,40 @@ function updateRecentCheckins(projectId) {
                         html += `
                             <li class="list-group-item">
                                 <strong>${check.check_time}</strong>
-                                <p class="mb-0 small text-muted preserve-newlines">${check.note || ''}</p>
-                            </li>
+                                ${check.note ? `<p class="mb-0 small text-muted preserve-newlines">${check.note}</p>` : ''}
                         `;
+                        
+                        // Add images if present - match the dashboard template structure
+                        if (check.has_images && check.images.length > 0) {
+                            html += `
+                                <div class="mt-2">
+                                    <div class="check-in-gallery">
+                            `;
+                            
+                            check.images.forEach(image => {
+                                html += `
+                                    <a href="/checkin/image/${image.id}" class="gallery-image-link">
+                                        <img src="${image.thumbnail_url}" alt="Check-in image" class="gallery-image">
+                                    </a>
+                                `;
+                            });
+                            
+                            html += `
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        html += `</li>`;
                     });
                     
                     html += '</ul>';
                     html += historyLinkHtml;
                     
                     cardBody.innerHTML = html;
+                    
+                    // Re-apply the gallery enhancements
+                    enhanceCheckInGalleries();
                 } else {
                     // No check-ins
                     let html = '<p class="text-center">No recent check-ins yet.</p>';
@@ -418,6 +335,34 @@ function updateRecentCheckins(projectId) {
         .catch(error => {
             console.error('Error updating recent check-ins:', error);
         });
+}
+
+// Function to enhance image galleries - extracted to be reusable
+function enhanceCheckInGalleries() {
+    // Find all thumbnail containers in the recent check-ins section
+    const checkInItems = document.querySelectorAll('.list-group-item');
+    
+    checkInItems.forEach(item => {
+        const imageContainer = item.querySelector('.check-in-gallery, .d-flex.flex-wrap.gap-2');
+        if (imageContainer) {
+            // Update the container classes for better responsive display
+            imageContainer.className = 'd-flex flex-wrap check-in-gallery';
+            
+            // Enhance each image thumbnail
+            const thumbnails = imageContainer.querySelectorAll('a[href*="/image/"]');
+            thumbnails.forEach(link => {
+                link.className = 'gallery-image-link';
+                
+                // Find the img inside the link and enhance it
+                const img = link.querySelector('img');
+                if (img) {
+                    img.className = 'gallery-image';
+                    // Remove inline styles from the image if they exist
+                    img.removeAttribute('style');
+                }
+            });
+        }
+    });
 }
 
 // Simple toast notification function
@@ -526,6 +471,17 @@ function submitCheckinWithImages(e) {
             noteField.value = '';
             if (imageInput) {
                 imageInput.value = '';
+                
+                // Clear image previews
+                const previewContainer = document.querySelector('.image-preview-container');
+                if (previewContainer) {
+                    previewContainer.innerHTML = '';
+                }
+                
+                // Reset selected files if using DataTransfer
+                if (window.DataTransfer && window.selectedFiles) {
+                    window.selectedFiles = new DataTransfer();
+                }
             }
             
             // Fetch updated recent check-ins
@@ -543,4 +499,143 @@ function submitCheckinWithImages(e) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalBtnText;
     });
+}
+
+// View toggle handler
+document.addEventListener('DOMContentLoaded', function() {
+    const viewToggleButtons = document.querySelectorAll('.view-toggle');
+    if (viewToggleButtons && viewToggleButtons.length > 0) {
+        viewToggleButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const url = this.dataset.url;
+                const view = this.dataset.view;
+                const tableContainer = document.getElementById('checkin-table-container');
+                
+                // Add active class to clicked button and remove from others
+                viewToggleButtons.forEach(btn => {
+                    if (btn.dataset.view === view) {
+                        btn.classList.add('btn-primary');
+                        btn.classList.remove('btn-outline-secondary');
+                    } else {
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-outline-secondary');
+                    }
+                });
+                
+                // Show loading indicator
+                tableContainer.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+                
+                // Fetch the updated check-ins
+                fetch(url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update ONLY the table content
+                        tableContainer.innerHTML = data.html;
+                        
+                        // Update URL without reloading the page
+                        history.pushState({}, '', url);
+                        
+                        // Re-attach event listeners to new delete buttons
+                        attachDeleteListeners();
+                        
+                        // Enhance any image galleries in the new content
+                        enhanceCheckInGalleries();
+                    } else {
+                        showToast(data.message || 'Failed to load check-ins', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Failed to load check-ins', 'danger');
+                });
+            });
+        });
+    }
+});
+
+// Function to attach delete listeners (called on initial load and after view switch)
+function attachDeleteListeners() {
+    const deleteForms = document.querySelectorAll('.delete-checkin-form');
+    if (deleteForms && deleteForms.length > 0) {
+        deleteForms.forEach(form => {
+            // Remove existing listeners to avoid duplicates
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                // Prevent the default form submission
+                e.preventDefault();
+                
+                // Show confirmation dialog
+                if (confirm('Are you sure you want to delete this check-in?')) {
+                    // If confirmed, submit the form programmatically as POST
+                    const formData = new FormData(newForm);
+                    
+                    fetch(newForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Try to find parent element (could be a table row or a card)
+                            const row = newForm.closest('tr') || newForm.closest('.card');
+                            
+                            if (row) {
+                                // Optional: Add fade-out animation
+                                row.style.transition = 'opacity 0.3s';
+                                row.style.opacity = '0';
+                                
+                                // Remove the row after animation completes
+                                setTimeout(() => {
+                                    row.remove();
+                                    
+                                    // Check if table/container is now empty
+                                    const container = document.querySelector('tbody') || document.querySelector('.d-md-none');
+                                    
+                                    if ((container && container.children.length === 0) || 
+                                        (container.tagName === 'TBODY' && container.querySelectorAll('tr').length === 0)) {
+                                        
+                                        // Replace with "no records" message
+                                        const tableContainer = document.querySelector('.table-responsive');
+                                        if (tableContainer) {
+                                            tableContainer.innerHTML = `
+                                                <div class="text-center py-4">
+                                                    <p class="text-muted">No check-in records found for this project.</p>
+                                                    <a href="${data.dashboardUrl}" class="btn btn-primary mt-2">
+                                                        <i class="bi bi-check-circle"></i> Check In Now
+                                                    </a>
+                                                </div>
+                                            `;
+                                        }
+                                    }
+                                    
+                                    // Show success message
+                                    showToast('Check-in deleted successfully', 'success');
+                                }, 300);
+                            } else {
+                                // If we couldn't find the parent element, just reload the page
+                                showToast('Check-in deleted successfully. Refreshing...', 'success');
+                                setTimeout(() => window.location.reload(), 1000);
+                            }
+                        } else {
+                            showToast(data.message || 'An error occurred', 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showToast('Failed to delete check-in', 'danger');
+                    });
+                }
+            });
+        });
+    }
 }

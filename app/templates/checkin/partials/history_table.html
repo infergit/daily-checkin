@@ -21,19 +21,21 @@
                 {% endif %}
                 <td>{{ check.display_date.strftime('%Y-%m-%d') }}</td>
                 <td>{{ check.check_time.strftime('%H:%M:%S') }}</td>
-                <td class="preserve-newlines">{{ check.note or '—' }}</td>
-                {% if check.has_images() %}
-                <div class="mt-2 mb-2">
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for image in check.images %}
-                        <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="image-thumbnail">
-                            {% set thumbnail_url = s3_service.generate_presigned_url('thumbnails/' + image.s3_key) %}
-                            <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
-                        </a>
-                        {% endfor %}
+                <td class="preserve-newlines">
+                    {{ check.note or '—' }}
+                    {% if check.has_images() %}
+                    <div class="mt-2 mb-2">
+                        <div class="check-in-gallery">
+                            {% for image in check.images %}
+                            <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="gallery-image-link">
+                                {% set thumbnail_url = s3_service.get_thumbnail_url(image.s3_key) %}
+                                <img src="{{ thumbnail_url }}" alt="Thumbnail" class="gallery-image">
+                            </a>
+                            {% endfor %}
+                        </div>
                     </div>
-                </div>
-                {% endif %}
+                    {% endif %}
+                </td>
                 <td>
                     {% if check.user_id == current_user.id %}
                     <form action="{{ url_for('checkin.delete_checkin', checkin_id=check.id) }}" method="POST" 
@@ -64,11 +66,11 @@
                     <p class="mb-1 preserve-newlines">{{ check.note or '—' }}</p>
                     {% if check.has_images() %}
                     <div class="mt-2 mb-2">
-                        <div class="d-flex flex-wrap gap-2">
+                        <div class="check-in-gallery">
                             {% for image in check.images %}
-                            <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="image-thumbnail">
-                                {% set thumbnail_url = s3_service.generate_presigned_url('thumbnails/' + image.s3_key) %}
-                                <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+                            <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="gallery-image-link">
+                                {% set thumbnail_url = s3_service.get_thumbnail_url(image.s3_key) %}
+                                <img src="{{ thumbnail_url }}" alt="Thumbnail" class="gallery-image">
                             </a>
                             {% endfor %}
                         </div>

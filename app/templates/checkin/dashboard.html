@@ -86,16 +86,17 @@
                                 
                                 {% if check.has_images() %}
                                 <div class="mt-2">
-                                    <div class="d-flex flex-wrap gap-2">
+                                    <div class="check-in-gallery">
                                         {% for image in check.images %}
-                                        <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="image-thumbnail">
+                                        <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="gallery-image-link">
                                             {% set thumbnail_url = s3_service.get_thumbnail_url(image.s3_key) %}
-                                            <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
+                                            <img src="{{ thumbnail_url }}" alt="Check-in image" class="gallery-image">
                                         </a>
                                         {% endfor %}
                                     </div>
                                 </div>
                                 {% endif %}
+                                
                             </li>
                         {% endfor %}
                     </ul>
@@ -135,25 +136,160 @@
         </div>
         {% endif %}
         
-        <!-- Project selector card -->
-        <div class="card mb-4">
-            <div class="card-header bg-secondary text-white">
-                <h4 class="mb-0">Switch Project</h4>
-            </div>
-            <div class="card-body">
-                <form method="GET" action="{{ url_for('checkin.dashboard') }}" id="project-form">
-                    {{ project_select_form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ project_select_form.project.label(class="form-label") }}
-                        {{ project_select_form.project(class="form-select", onchange="this.form.submit()") }}
-                    </div>
-                </form>
-            </div>
-        </div>
+        <!-- Removed the "Switch Project" card -->
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}  <!-- This keeps any scripts from the parent template -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Image preview and management functionality
+    const imageInput = document.getElementById('images');
+    const previewContainer = document.createElement('div');
+    previewContainer.className = 'image-preview-container mt-2 d-flex flex-wrap gap-2';
+    
+    // Insert preview container after the file input
+    imageInput.parentNode.insertBefore(previewContainer, imageInput.nextSibling);
+    
+    // Selected files storage
+    let selectedFiles = new DataTransfer();
+    
+    // Handle file selection
+    imageInput.addEventListener('change', function(e) {
+        const files = e.target.files;
+        
+        if (files.length > 0) {
+            // Process new files
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // Check if total files would exceed the limit
+                if (selectedFiles.files.length + i >= 5) {
+                    alert('Maximum 5 images allowed');
+                    break;
+                }
+                
+                // Size validation
+                const maxSize = parseInt(imageInput.dataset.maxSize);
+                if (file.size > maxSize) {
+                    // FIXED: Escape JavaScript template literals for Jinja
+                    alert('File ' + file.name + ' exceeds the maximum size limit of ' + (maxSize/1024/1024) + 'MB');
+                    continue;
+                }
+                
+                // Add to our file collection
+                selectedFiles.items.add(file);
+                
+                // Create preview
+                createImagePreview(file);
+            }
+            
+            // Update the input with our managed files
+            updateFileInput();
+        }
+    });
+    
+    // Create preview for an image
+    function createImagePreview(file) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const previewWrapper = document.createElement('div');
+            previewWrapper.className = 'position-relative';
+            previewWrapper.dataset.fileName = file.name;
+            
+            const preview = document.createElement('img');
+            preview.src = e.target.result;
+            preview.className = 'img-thumbnail';
+            preview.style.width = '100px';
+            preview.style.height = '100px';
+            preview.style.objectFit = 'cover';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-sm btn-danger position-absolute top-0 end-0';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.style.borderRadius = '50%';
+            deleteBtn.style.width = '24px';
+            deleteBtn.style.height = '24px';
+            deleteBtn.style.padding = '0';
+            deleteBtn.style.lineHeight = '24px';
+            deleteBtn.style.transform = 'translate(30%, -30%)';
+            
+            deleteBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                removeImage(file.name);
+                previewWrapper.remove();
+            });
+            
+            previewWrapper.appendChild(preview);
+            previewWrapper.appendChild(deleteBtn);
+            previewContainer.appendChild(previewWrapper);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+    
+    // Remove image from selection
+    function removeImage(fileName) {
+        const newFiles = new DataTransfer();
+        
+        for (let i = 0; i < selectedFiles.files.length; i++) {
+            const file = selectedFiles.files[i];
+            if (file.name !== fileName) {
+                newFiles.items.add(file);
+            }
+        }
+        
+        selectedFiles = newFiles;
+        updateFileInput();
+    }
+    
+    // Update the file input with current selection
+    function updateFileInput() {
+        imageInput.files = selectedFiles.files;
+    }
+    
+    // Reset the form when submitting
+    const form = imageInput.closest('form');
+    form.addEventListener('submit', function() {
+        setTimeout(() => {
+            previewContainer.innerHTML = '';
+            selectedFiles = new DataTransfer();
+        }, 100);
+    });
+
+        // ===== ENHANCE EXISTING CHECK-IN IMAGES =====
+    // Make the checkin image gallery responsive and modern
+    enhanceCheckInGalleries();
+    
+    function enhanceCheckInGalleries() {
+        // Find all thumbnail containers in the recent check-ins section
+        const checkInItems = document.querySelectorAll('.list-group-item');
+        
+        checkInItems.forEach(item => {
+            const imageContainer = item.querySelector('.d-flex.flex-wrap.gap-2');
+            if (imageContainer) {
+                // Update the container classes for better responsive display
+                imageContainer.className = 'd-flex flex-wrap check-in-gallery';
+                
+                // Enhance each image thumbnail
+                const thumbnails = imageContainer.querySelectorAll('.image-thumbnail');
+                thumbnails.forEach(link => {
+                    link.className = 'gallery-image-link';
+                    
+                    // Find the img inside the link and enhance it
+                    const img = link.querySelector('img');
+                    if (img) {
+                        img.className = 'gallery-image';
+                        // Remove inline styles from the image
+                        img.removeAttribute('style');
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

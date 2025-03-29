@@ -33,3 +33,178 @@ main {
 .input-group-text {
     font-size: 1.1rem;
 }
+/* Add this to your CSS file or inside a <style> tag in the head */
+.image-preview-container {
+    margin-top: 10px;
+    min-height: 30px;
+}
+
+.image-preview-container .position-relative {
+    transition: all 0.2s ease-in-out;
+}
+
+.image-preview-container .position-relative:hover {
+    transform: scale(1.05);
+}
+
+/* Add this class to your existing stylesheets for preserving newlines in notes */
+.preserve-newlines {
+    white-space: pre-line;
+}
+
+/* Enhanced image upload preview styles */
+.image-preview-container {
+    margin: 15px 0;
+    min-height: 40px;
+}
+
+.image-preview-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+    width: 140px;
+    margin-bottom: 10px;
+}
+
+.image-preview-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.preview-image {
+    width: 140px;
+    height: 140px;
+    object-fit: cover;
+    display: block;
+}
+
+.delete-image-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: rgba(220, 53, 69, 0.8);
+    color: white;
+    border: none;
+    font-size: 18px;
+    line-height: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.delete-image-btn:hover {
+    background-color: rgb(220, 53, 69);
+    transform: scale(1.1);
+}
+
+.filename-preview {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(0,0,0,0.6);
+    color: white;
+    padding: 5px;
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Enhanced styles for check-in history images */
+.check-in-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 15px 0;
+}
+
+.gallery-image-link {
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    display: block;
+    text-decoration: none;
+    position: relative;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
+
+.gallery-image-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    z-index: 1;
+}
+
+.gallery-image-link:active {
+    transform: scale(0.98);
+}
+
+.gallery-image {
+    width: 180px;
+    height: 180px;
+    object-fit: cover;
+    display: block;
+}
+
+/* Handle camera information overlay from phone images */
+.gallery-image-link::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    z-index: 1;
+}
+
+/* Make the images more responsive on mobile */
+@media (max-width: 576px) {
+    .gallery-image {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .check-in-gallery {
+        gap: 8px;
+        justify-content: center;
+    }
+}
+
+/* Even smaller screens */
+@media (max-width: 400px) {
+    .gallery-image {
+        width: 130px;
+        height: 130px;
+    }
+}
+
+/* Medium screens and larger */
+@media (min-width: 768px) {
+    .gallery-image {
+        width: 200px;
+        height: 200px;
+    }
+}
+
+/* Larger screens */
+@media (min-width: 992px) {
+    .gallery-image {
+        width: 220px;
+        height: 220px;
+    }
+}
+
+/* Preserve newlines in notes */
+.preserve-newlines {
+    white-space: pre-line;
+}
