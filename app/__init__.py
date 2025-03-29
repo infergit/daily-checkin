@@ -13,6 +13,8 @@ from flask_wtf.csrf import CSRFProtect  # Add this import
 from config import Config
 from datetime import timedelta
 import time
+from app.services.s3_service import S3Service
+
 # Remove these imports since we're not using them yet
 # from app.utils.telegram_bot import configure_telegram_bot
 # import threading
@@ -63,6 +65,11 @@ def create_app(config_class=Config):
             version = int(time.time())  # Fallback to current time
             
         return {'asset_version': version}
+    
+    @app.context_processor
+    def inject_s3_service():
+        s3_service = S3Service()
+        return {'s3_service': s3_service}
     
     @app.template_global()
     def get_pending_join_request_count(project_id):

@@ -3,7 +3,8 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, date, timedelta  # 添加 timedelta 导入
 from app import db
-from app.models.models import CheckIn, Project, ProjectMember, ProjectStat, UserProjectStat, User, FriendRelationship  # 添加 User, FriendRelationship
+from app.services.s3_service import S3Service  # Import S3Service class
+from app.models.models import CheckIn, Project, ProjectMember, ProjectStat, UserProjectStat, User, FriendRelationship, CheckInImage  # 添加 CheckInImage
 from app.checkin.forms import CheckInForm, ProjectSelectForm
 from app.utils.timezone import get_user_timezone, to_user_timezone
 import pytz
@@ -132,6 +133,10 @@ def dashboard():
             datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
         ).date()
     
+    # Create S3 service for the template
+    from app.services.s3_service import S3Service
+    s3_service = S3Service()
+    
     return render_template(
         'checkin/dashboard.html',
         title='Dashboard',
@@ -141,7 +146,8 @@ def dashboard():
         recent_checkins=recent_checkins,
         project=project,
         projects=projects,
-        user_stats=user_stats
+        user_stats=user_stats,
+        s3_service=s3_service
     )
 
 @checkin.route('/history')
@@ -473,21 +479,31 @@ def view_checkin(checkin_id):
     """View a specific check-in record with privacy checks"""
     checkin = CheckIn.query.get_or_404(checkin_id)
     
-    # Check if user has permission to view this check-in
+    # Verify permission to view this check-in
     if not can_view_checkin(current_user.id, checkin.user_id, checkin.project_id):
-        flash('You do not have permission to view this check-in', 'danger')
-        return redirect(url_for('checkin.history', project=checkin.project_id))
+        flash('You do not have permission to view this check-in.', 'danger')
+        return redirect(url_for('checkin.dashboard'))
     
-    # If authorized, show the check-in details
-    user = User.query.get(checkin.user_id)
+    # Convert check_time to local time
+    checkin.check_time = to_user_timezone(checkin.check_time)
+    # Add display_date attribute for template use
+    checkin.display_date = to_user_timezone(
+        datetime.combine(checkin.check_date, datetime.min.time()).replace(tzinfo=pytz.UTC)
+    ).date()
+    
+    # Get project details
     project = Project.query.get(checkin.project_id)
+    
+    # Create S3 service for the template
+    from app.services.s3_service import S3Service
+    s3_service = S3Service()
     
     return render_template(
         'checkin/view_checkin.html',
-        title='Check-in Details',
+        title='View Check-in',
         checkin=checkin,
-        user=user,
-        project=project
+        project=project,
+        s3_service=s3_service
     )
 
 @checkin.route('/timeline')
@@ -721,16 +737,30 @@ def get_project_details(project_id):
 @checkin.route('/api/checkin', methods=['POST'])
 @login_required
 def ajax_checkin():
-    # Only accept JSON requests
-    if not request.is_json:
+    """
+    API endpoint for creating a check-in with optional image uploads
+    
+    Accepts form data with:
+    - project_id: ID of the project
+    - note: Text content for the check-in
+    - images: Optional file uploads (multiple)
+    """
+    # Accept both JSON and form data requests
+    if request.is_json:
+        data = request.json
+        project_id = data.get('project_id')
+        note = data.get('note', '')
+        has_images = False
+    else:
+        project_id = request.form.get('project_id')
+        note = request.form.get('note', '')
+        has_images = bool(request.files) and any(request.files.getlist('images'))
+    
+    if not project_id:
         return jsonify({
             'success': False,
-            'message': 'Invalid request format'
+            'message': 'Project ID is required'
         }), 400
-    
-    data = request.json
-    project_id = data.get('project_id')
-    note = data.get('note', '')
     
     # Validate project access
     project = Project.query.get_or_404(project_id)
@@ -782,10 +812,71 @@ def ajax_checkin():
     )
     
     db.session.add(checkin)
+    db.session.commit()  # Commit to get an ID for the check-in
+    
+    # Process images if provided
+    images_added = 0
+    if has_images:
+        from app.utils.image_utils import process_image, create_thumbnail, is_valid_image
+        from app.services.s3_service import S3Service
+        
+        images = request.files.getlist('images')
+        if images and any(img.filename for img in images):
+            s3_service = S3Service()
+            max_image_size = current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024)
+            allowed_extensions = current_app.config.get('ALLOWED_IMAGE_EXTENSIONS', 
+                                                   ['jpg', 'jpeg', 'png', 'gif', 'webp'])
+            
+            for image in images:
+                if image and image.filename:
+                    # Check file size
+                    image_data = image.read()
+                    if len(image_data) > max_image_size:
+                        current_app.logger.warning(f"Image {image.filename} exceeds maximum size")
+                        continue
+                    
+                    # Validate image type
+                    if not is_valid_image(image_data, allowed_extensions):
+                        current_app.logger.warning(f"File {image.filename} is not a valid image or has unsupported format")
+                        continue
+                    
+                    try:
+                        # Process the image (resize, optimize)
+                        processed_data, content_type, width, height = process_image(image_data)
+                        
+                        if processed_data and content_type:
+                            # Generate thumbnail
+                            thumbnail_data = create_thumbnail(image_data)
+                            
+                            # Generate S3 keys
+                            s3_key = s3_service.generate_s3_key(current_user.id, project.id, image.filename)
+                            thumbnail_key = f"thumbnails/{s3_key}"
+                            
+                            # Upload to S3
+                            s3_service.upload_file(processed_data, s3_key, content_type)
+                            if thumbnail_data:
+                                s3_service.upload_file(thumbnail_data, thumbnail_key, 'image/jpeg')
+                            
+                            # Add image to check-in
+                            checkin.add_image(
+                                s3_key=s3_key,
+                                original_filename=image.filename,
+                                content_type=content_type,
+                                file_size=len(processed_data),
+                                is_public=False  # Default to private
+                            )
+                            
+                            images_added += 1
+                            current_app.logger.info(f"Successfully added image {image.filename} to check-in {checkin.id}")
+                            
+                            # Limit the number of images per check-in if needed
+                            if images_added >= 5:  # Limit to 5 images per check-in
+                                break
+                    except Exception as e:
+                        current_app.logger.error(f"Failed to process image {image.filename}: {str(e)}")
+                        continue
     
     try:
-        db.session.commit()
-        
         # Notify friends
         try:
             notify_friends_of_checkin(current_user, project, checkin)
@@ -799,11 +890,17 @@ def ajax_checkin():
         
         db.session.commit()
         
-        return jsonify({
+        response_data = {
             'success': True,
             'message': 'Check-in successful',
-            'checkin_id': checkin.id
-        })
+            'checkin_id': checkin.id,
+        }
+        
+        if images_added > 0:
+            response_data['images_added'] = images_added
+            
+        return jsonify(response_data)
+        
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error during check-in: {str(e)}")
@@ -852,3 +949,62 @@ def get_recent_checkins(project_id):
         'success': True,
         'recent_checkins': checkins_json
     })
+
+@checkin.route('/image/<int:image_id>')
+@login_required
+def view_image(image_id):
+    """View a specific check-in image with privacy checks"""
+    image = CheckInImage.query.get_or_404(image_id)
+    checkin = CheckIn.query.get(image.checkin_id)
+    
+    # Verify permission to view the image
+    if not can_view_checkin(current_user.id, checkin.user_id, checkin.project_id) and not image.is_public:
+        flash('You do not have permission to view this image.', 'danger')
+        return redirect(url_for('checkin.dashboard'))
+    
+    # Get image URL from S3
+    s3_service = S3Service()
+    image_url = s3_service.generate_presigned_url(image.s3_key)
+    
+    if not image_url:
+        flash('Failed to retrieve image.', 'danger')
+        return redirect(url_for('checkin.view_checkin', checkin_id=checkin.id))
+    
+    return render_template(
+        'checkin/view_image.html',
+        title='View Image',
+        image=image,
+        checkin=checkin,
+        image_url=image_url
+    )
+
+@checkin.route('/image/<int:image_id>/delete', methods=['POST'])
+@login_required
+def delete_image(image_id):
+    """Delete a check-in image"""
+    image = CheckInImage.query.get_or_404(image_id)
+    checkin = CheckIn.query.get(image.checkin_id)
+    
+    # Verify ownership
+    if checkin.user_id != current_user.id:
+        flash('You can only delete your own images.', 'danger')
+        return redirect(url_for('checkin.view_checkin', checkin_id=checkin.id))
+    
+    # Delete from S3
+    try:
+        s3_service = S3Service()
+        s3_service.delete_file(image.s3_key)
+        
+        # Also delete thumbnail if it exists
+        thumbnail_key = f"thumbnails/{image.s3_key}"
+        s3_service.delete_file(thumbnail_key)
+    except Exception as e:
+        current_app.logger.error(f"Failed to delete image from S3: {str(e)}")
+        # Continue with database deletion even if S3 deletion fails
+    
+    # Delete from database
+    db.session.delete(image)
+    db.session.commit()
+    
+    flash('Image deleted successfully.', 'success')
+    return redirect(url_for('checkin.view_checkin', checkin_id=checkin.id))

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}
+View Check-in
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3>Check-in #{{ checkin.id }}</h3>
+    <p><strong>Time:</strong> {{ checkin.check_time }}</p>
+    <p><strong>Note:</strong> {{ checkin.note }}</p>
+    {% if checkin.has_images() %}
+    <div class="d-flex flex-wrap gap-2">
+        {% for image in checkin.images %}
+        <a href="{{ url_for('checkin.view_image', image_id=image.id) }}">
+            {% set thumbnail_url = s3_service.get_thumbnail_url(image.s3_key) %}
+            <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width:100px; height:100px; object-fit: cover;">
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

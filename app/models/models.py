@@ -95,6 +95,33 @@ class CheckIn(db.Model):
     def __repr__(self):
         return f'<CheckIn user_id={self.user_id} project_id={self.project_id} on {self.check_date}>'
 
+    def add_image(self, s3_key, original_filename, content_type, file_size, is_public=False):
+        """向当前打卡添加一张图片"""
+        # 确定显示顺序
+        max_order = 0
+        if self.images:
+            max_order = max(img.display_order for img in self.images) if self.images else 0
+
+        image = CheckInImage(
+            checkin_id=self.id,
+            s3_key=s3_key,
+            original_filename=original_filename,
+            content_type=content_type,
+            file_size=file_size,
+            is_public=is_public,
+            display_order=max_order + 1
+        )
+        db.session.add(image)
+        return image
+
+    def has_images(self):
+        """检查当前打卡是否有图片"""
+        return bool(self.images)
+
+    def get_image_count(self):
+        """获取当前打卡的图片数量"""
+        return len(self.images)
+
 class ProjectStat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, nullable=False, unique=True)
@@ -245,3 +272,27 @@ class UserPreference(db.Model):
     
     def __repr__(self):
         return f'<UserPreference id={self.id} user_id={self.user_id} key={self.key}>'
+
+class CheckInImage(db.Model):
+    """打卡图片模型
+    
+    存储用户打卡时上传的图片信息，通过 checkin_id 关联到对应的打卡记录。
+    一条打卡记录可以关联多张图片。
+    """
+    __tablename__ = 'checkin_images'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    checkin_id = db.Column(db.Integer, db.ForeignKey('check_in.id', ondelete='CASCADE'), nullable=False)
+    s3_key = db.Column(db.String(255), nullable=False)  # S3存储路径
+    original_filename = db.Column(db.String(255), nullable=True)  # 原始文件名
+    content_type = db.Column(db.String(100), nullable=False)  # 文件MIME类型
+    file_size = db.Column(db.Integer, nullable=False)  # 文件大小(字节)
+    upload_time = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    is_public = db.Column(db.Boolean, default=False)  # 是否公开可访问
+    display_order = db.Column(db.Integer, default=0)  # 显示顺序
+    
+    # 建立与CheckIn表的关系
+    check_in = db.relationship('CheckIn', backref=db.backref('images', lazy=True, cascade='all, delete-orphan'))
+    
+    def __repr__(self):
+        return f'<CheckInImage id={self.id} checkin_id={self.checkin_id}>'

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}View Image - Daily Check-in{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-3">
+        <div class="col">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('checkin.dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('checkin.view_checkin', checkin_id=checkin.id) }}">Check-in</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Image</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        Image from {{ checkin.check_time.strftime('%Y-%m-%d %H:%M') }}
+                    </h4>
+                    {% if current_user.id == checkin.user_id %}
+                    <form method="POST" action="{{ url_for('checkin.delete_image', image_id=image.id) }}" 
+                          onsubmit="return confirm('Are you sure you want to delete this image? This cannot be undone.');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="card-body text-center">
+                    <img src="{{ image_url }}" class="img-fluid" alt="Check-in image">
+                    {% if image.original_filename %}
+                    <p class="mt-2 text-muted">Original filename: {{ image.original_filename }}</p>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('checkin.view_checkin', checkin_id=checkin.id) }}" class="btn btn-primary">
+                        <i class="bi bi-arrow-left"></i> Back to Check-in
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

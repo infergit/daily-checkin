@@ -22,6 +22,18 @@
                 <td>{{ check.display_date.strftime('%Y-%m-%d') }}</td>
                 <td>{{ check.check_time.strftime('%H:%M:%S') }}</td>
                 <td class="preserve-newlines">{{ check.note or '—' }}</td>
+                {% if check.has_images() %}
+                <div class="mt-2 mb-2">
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for image in check.images %}
+                        <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="image-thumbnail">
+                            {% set thumbnail_url = s3_service.generate_presigned_url('thumbnails/' + image.s3_key) %}
+                            <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
                 <td>
                     {% if check.user_id == current_user.id %}
                     <form action="{{ url_for('checkin.delete_checkin', checkin_id=check.id) }}" method="POST" 
@@ -50,6 +62,18 @@
                 <!-- First row: Note (main content) -->
                 <div class="mb-2">
                     <p class="mb-1 preserve-newlines">{{ check.note or '—' }}</p>
+                    {% if check.has_images() %}
+                    <div class="mt-2 mb-2">
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for image in check.images %}
+                            <a href="{{ url_for('checkin.view_image', image_id=image.id) }}" class="image-thumbnail">
+                                {% set thumbnail_url = s3_service.generate_presigned_url('thumbnails/' + image.s3_key) %}
+                                <img src="{{ thumbnail_url }}" alt="Thumbnail" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 
                 <!-- Second row: Metadata and actions -->

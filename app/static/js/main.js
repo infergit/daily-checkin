@@ -41,49 +41,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle check-in submission
-    if (checkinBtn) {
-        checkinBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            if (!noteField.value.trim()) {
-                // Show warning in the correct style
-                showFlashMessage('<div class="alert alert-warning">Please enter a note for your check-in</div>');
-                return;
-            }
-            
-            // Make AJAX request to submit check-in
-            fetch('/checkin/api/checkin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    project_id: projectSelect.value,
-                    note: noteField.value
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success message in the same style as project creation
-                    showFlashMessage('<div class="alert alert-success">Check-in successful!</div>');
-                    
-                    // Clear the note field for next check-in
-                    noteField.value = '';
-                    
-                    // Fetch updated recent check-ins
-                    updateRecentCheckins(projectSelect.value);
-                } else {
-                    showFlashMessage(`<div class="alert alert-danger">Error: ${data.message}</div>`);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showFlashMessage('<div class="alert alert-danger">There was an error processing your check-in</div>');
-            });
-        });
+    // Handle check-in submission with images
+    if (checkinBtn && checkinForm) {
+        checkinBtn.addEventListener('click', submitCheckinWithImages);
     }
     
     // Function to display flash messages as centered floating overlays
@@ -496,5 +456,91 @@ function showToast(message, type = 'info') {
     // Remove toast after it's hidden
     toastElement.addEventListener('hidden.bs.toast', function() {
         toastElement.remove();
+    });
+}
+
+// Function to handle check-in submission with images
+function submitCheckinWithImages(e) {
+    e.preventDefault();
+    
+    const projectSelect = document.getElementById('project_id');
+    const noteField = document.getElementById('note');
+    const imageInput = document.getElementById('images');
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    if (!noteField.value.trim()) {
+        showToast('Please enter a note for your check-in', 'warning');
+        return;
+    }
+    
+    // Create FormData object for file uploads
+    const formData = new FormData();
+    formData.append('project_id', projectSelect.value);
+    formData.append('note', noteField.value);
+    
+    // Add images if any were selected
+    if (imageInput && imageInput.files.length > 0) {
+        // Check file size before uploading
+        const maxSize = imageInput.dataset.maxSize || 5242880; // 5MB default
+        let oversizedFiles = [];
+        
+        for (let i = 0; i < imageInput.files.length; i++) {
+            const file = imageInput.files[i];
+            if (file.size > maxSize) {
+                oversizedFiles.push(file.name);
+            } else {
+                formData.append('images', file);
+            }
+        }
+        
+        if (oversizedFiles.length > 0) {
+            showToast(`Some files exceed the maximum size limit: ${oversizedFiles.join(', ')}`, 'warning');
+        }
+    }
+    
+    // Show loading state
+    const submitBtn = document.getElementById('checkin-btn');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+    
+    // Make AJAX request to submit check-in
+    fetch('/checkin/api/checkin', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            let message = 'Check-in successful!';
+            if (data.images_added) {
+                message += ` Uploaded ${data.images_added} image(s).`;
+            }
+            showToast(message, 'success');
+            
+            // Clear the form
+            noteField.value = '';
+            if (imageInput) {
+                imageInput.value = '';
+            }
+            
+            // Fetch updated recent check-ins
+            updateRecentCheckins(projectSelect.value);
+        } else {
+            showToast(`Error: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('There was an error processing your check-in', 'danger');
+    })
+    .finally(() => {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
     });
 }
