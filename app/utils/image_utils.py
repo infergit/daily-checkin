@@ -188,7 +188,7 @@ def get_image_dimensions(image_data):
         logger.error(f"Error getting image dimensions: {str(e)}")
         return None
 
-def is_valid_image(file_data, allowed_extensions=None):
+def is_valid_image_old(file_data, allowed_extensions=None):
     """Validate if data is a valid image"""
     if allowed_extensions is None:
         allowed_extensions = current_app.config.get(
@@ -226,4 +226,15 @@ def is_valid_image(file_data, allowed_extensions=None):
                 pass
                 
         logger.warning(f"Image validation error: {str(e)}")
+        return False
+
+''' 临时解决iPhone相册图片上传问题 '''
+def is_valid_image(image_data, allowed_extensions):
+    try:
+        # Try to open as image, which validates it's a real image
+        img = Image.open(BytesIO(image_data))
+        img.verify()  # Verify it's a valid image
+        return True
+    except Exception as e:
+        current_app.logger.error(f"Image validation error: {str(e)}")
         return False

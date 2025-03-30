@@ -35,9 +35,6 @@
                 </div>
                 <div class="card-body text-center">
                     <img src="{{ image_url }}" class="img-fluid" alt="Check-in image">
-                    {% if image.original_filename %}
-                    <p class="mt-2 text-muted">Original filename: {{ image.original_filename }}</p>
-                    {% endif %}
                 </div>
                 <div class="card-footer">
                     <a href="{{ url_for('checkin.view_checkin', checkin_id=checkin.id) }}" class="btn btn-primary">

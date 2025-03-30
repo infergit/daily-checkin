@@ -7,7 +7,8 @@ View Check-in
 {% block content %}
 <div class="container mt-4">
     <h3>Check-in #{{ checkin.id }}</h3>
-    <p><strong>Time:</strong> {{ checkin.check_time }}</p>
+    <p><strong>Project:</strong> <a href="{{ url_for('projects.view_project', project_id=checkin.project_id) }}">{{ project.name }}</a></p>
+    <p><strong>Time:</strong> {{ checkin.check_time.strftime('%Y-%m-%d %H:%M:%S') }}</p>
     <p><strong>Note:</strong> {{ checkin.note }}</p>
     {% if checkin.has_images() %}
     <div class="d-flex flex-wrap gap-2">
