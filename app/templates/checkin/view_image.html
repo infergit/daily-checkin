@@ -21,7 +21,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">
-                        Image from {{ checkin.check_time.strftime('%Y-%m-%d %H:%M') }}
+                        Image from {{ checkin.check_time.strftime('%Y-%m-%d %H:%M:%S') }}
                     </h4>
                     {% if current_user.id == checkin.user_id %}
                     <form method="POST" action="{{ url_for('checkin.delete_image', image_id=image.id) }}" 

@@ -997,7 +997,7 @@ def view_image(image_id):
     if not image_url:
         flash('Failed to retrieve image.', 'danger')
         return redirect(url_for('checkin.view_checkin', checkin_id=checkin.id))
-    
+    checkin.check_time = to_user_timezone(checkin.check_time)
     return render_template(
         'checkin/view_image.html',
         title='View Image',
