@@ -16,13 +16,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-def process_image(image_data, max_width=1200, quality=85, format='JPEG'):
+def process_image(image_data, max_width=1200, quality=100, format='JPEG'):
     """
     Process an image for storage:
     1. Resize large images while maintaining aspect ratio
     2. Optionally convert format
     3. Handle EXIF rotation
-    4. Optimize for storage
+    4. Strip EXIF metadata for privacy
+    5. Preserve maximum original image quality
     
     Args:
         image_data (bytes): Raw image data
@@ -37,8 +38,21 @@ def process_image(image_data, max_width=1200, quality=85, format='JPEG'):
         # With pillow_heif registered, we can directly open HEIC files with PIL
         img = Image.open(BytesIO(image_data))
         
-        # Handle EXIF rotation
+        # Handle EXIF rotation but don't keep the EXIF data
         img = correct_image_orientation(img)
+        
+        # Create a new image with same pixel data but no EXIF metadata
+        if format == 'JPEG' and img.mode == 'RGBA':
+            # Convert RGBA to RGB if saving as JPEG
+            clean_img = Image.new('RGB', img.size)
+        else:
+            clean_img = Image.new(img.mode, img.size)
+        
+        # Copy the pixel data (without metadata)
+        clean_img.paste(img)
+        
+        # Use our clean image from now on
+        img = clean_img
         
         # Get original dimensions
         original_width, original_height = img.size
@@ -49,16 +63,13 @@ def process_image(image_data, max_width=1200, quality=85, format='JPEG'):
             new_height = int(original_height * ratio)
             img = img.resize((max_width, new_height), Image.LANCZOS)
         
-        # Convert RGBA to RGB if saving as JPEG
-        if format == 'JPEG' and img.mode == 'RGBA':
-            img = img.convert('RGB')
-        
         # Save the processed image to bytes
         output = BytesIO()
         
-        # Save with appropriate format and settings
+        # Save with appropriate format and settings, but no EXIF data
+        # Maximum quality (100) to preserve all original quality
         if format == 'JPEG':
-            img.save(output, format=format, quality=quality, optimize=True)
+            img.save(output, format=format, quality=quality, optimize=True, exif=bytes())
             content_type = 'image/jpeg'
         elif format == 'PNG':
             img.save(output, format=format, optimize=True)
@@ -68,7 +79,7 @@ def process_image(image_data, max_width=1200, quality=85, format='JPEG'):
             content_type = 'image/webp'
         else:
             # Default to JPEG
-            img.save(output, format='JPEG', quality=quality, optimize=True)
+            img.save(output, format='JPEG', quality=quality, optimize=True, exif=bytes())
             content_type = 'image/jpeg'
         
         # Get current dimensions after processing
@@ -152,18 +163,24 @@ def create_thumbnail(image_data, size=None):
         # Handle EXIF rotation
         img = correct_image_orientation(img)
         
+        # Create a clean image without EXIF data
+        if img.mode == 'RGBA':
+            clean_img = Image.new('RGB', img.size)
+        else:
+            clean_img = Image.new(img.mode, img.size)
+            
+        # Copy the pixel data (without metadata)
+        clean_img.paste(img)
+        img = clean_img
+        
         # Create thumbnail (maintains aspect ratio)
         img.thumbnail(size, Image.LANCZOS)
         
         # Save thumbnail to bytes
         output = BytesIO()
         
-        # Convert RGBA to RGB if needed
-        if img.mode == 'RGBA':
-            img = img.convert('RGB')
-        
-        # Save optimized JPEG
-        img.save(output, format='JPEG', quality=85, optimize=True)
+        # Save optimized JPEG with no EXIF data - higher quality for thumbnails
+        img.save(output, format='JPEG', quality=95, optimize=True, exif=bytes())
         
         return output.getvalue()
     
