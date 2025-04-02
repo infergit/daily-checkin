@@ -19,6 +19,12 @@ class Config:
     AWS_REGION = os.environ.get('AWS_REGION', '')
     S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', '')
     
+    # AWS CloudFront configuration
+    USE_CLOUDFRONT = os.environ.get('USE_CLOUDFRONT', 'False').lower() in ('true', '1', 't', 'yes')
+    CLOUDFRONT_DOMAIN = os.environ.get('CLOUDFRONT_DOMAIN', '')
+    CLOUDFRONT_KEY_PAIR_ID = os.environ.get('CLOUDFRONT_KEY_PAIR_ID', '')
+    CLOUDFRONT_PRIVATE_KEY_PATH = os.environ.get('CLOUDFRONT_PRIVATE_KEY_PATH', '')
+    
     # Image processing configuration
     MAX_IMAGE_SIZE = int(os.environ.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024))  # 5MB default
     ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif']  # Add iPhone formats

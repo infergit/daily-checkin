@@ -6,6 +6,17 @@ from datetime import datetime, timedelta
 from flask import current_app
 import logging
 
+# Add imports for CloudFront signed URLs (if using private content)
+try:
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from botocore.signers import CloudFrontSigner
+    CLOUDFRONT_SIGNING_AVAILABLE = True
+except ImportError:
+    CLOUDFRONT_SIGNING_AVAILABLE = False
+
 class S3Service:
     """
     S3 Storage Service
@@ -25,6 +36,15 @@ class S3Service:
             region_name=region
         )
         self.bucket_name = current_app.config['S3_BUCKET_NAME']
+        
+        # CloudFront configuration
+        self.use_cloudfront = current_app.config.get('USE_CLOUDFRONT', False)
+        self.cloudfront_domain = current_app.config.get('CLOUDFRONT_DOMAIN', '')
+        self.cloudfront_key_pair_id = current_app.config.get('CLOUDFRONT_KEY_PAIR_ID', '')
+        self.cloudfront_private_key_path = current_app.config.get('CLOUDFRONT_PRIVATE_KEY_PATH', '')
+        
+        if self.use_cloudfront:
+            current_app.logger.info(f"CloudFront distribution configured: {self.cloudfront_domain}")
     
     def generate_s3_key(self, user_id, project_id, filename):
         """Generate unique S3 storage path
@@ -67,6 +87,125 @@ class S3Service:
             current_app.logger.error(f"Error uploading to S3: {e}")
             raise
     
+    def get_cloudfront_url(self, s3_key, expires=3600):
+        """Get a CloudFront URL for a file
+        
+        Args:
+            s3_key: File path in S3
+            expires: URL validity period (seconds)
+            
+        Returns:
+            url: CloudFront URL
+        """
+        if not self.use_cloudfront or not self.cloudfront_domain:
+            # Fall back to S3 if CloudFront is not configured
+            return self.get_file_url(s3_key, expires)
+        
+        # If using CloudFront with private content, sign the URL
+        if self.cloudfront_key_pair_id and self.cloudfront_private_key_path and CLOUDFRONT_SIGNING_AVAILABLE:
+            try:
+                # Check if the private key file exists
+                if not os.path.exists(self.cloudfront_private_key_path):
+                    current_app.logger.error(f"CloudFront private key not found at: {self.cloudfront_private_key_path}")
+                    # Fall back to S3 presigned URL
+                    return self.s3_client.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': self.bucket_name, 'Key': s3_key},
+                        ExpiresIn=expires
+                    )
+                
+                # Read the private key
+                with open(self.cloudfront_private_key_path, 'rb') as key_file:
+                    private_key = serialization.load_pem_private_key(
+                        key_file.read(),
+                        password=None,
+                        backend=default_backend()
+                    )
+                
+                # Create a signer
+                def rsa_signer(message):
+                    return private_key.sign(
+                        message,
+                        padding.PKCS1v15(),
+                        hashes.SHA1()
+                    )
+                
+                # Ensure s3_key doesn't start with a slash
+                if s3_key.startswith('/'):
+                    s3_key = s3_key[1:]
+                    
+                # Calculate expiration time
+                expire_date = datetime.utcnow() + timedelta(seconds=expires)
+                
+                # Create CloudFront signer
+                cloudfront_signer = CloudFrontSigner(self.cloudfront_key_pair_id, rsa_signer)
+                
+                # Generate the signed URL
+                signed_url = cloudfront_signer.generate_presigned_url(
+                    f"https://{self.cloudfront_domain}/{s3_key}",
+                    date_less_than=expire_date
+                )
+                
+                current_app.logger.debug(f"Generated signed CloudFront URL for {s3_key}")
+                return signed_url
+                
+            except Exception as e:
+                current_app.logger.error(f"Error generating signed CloudFront URL: {e}")
+                # Fall back to S3 presigned URL
+                return self.s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={'Bucket': self.bucket_name, 'Key': s3_key},
+                    ExpiresIn=expires
+                )
+        
+        # Regular CloudFront URL (fallback, but will fail for private content)
+        return f"https://{self.cloudfront_domain}/{s3_key}"
+    
+    def _get_signed_cloudfront_url(self, s3_key, expires=3600):
+        """Generate a signed CloudFront URL for private content
+        
+        Only used if CloudFront is configured with a key pair ID and private key
+        """
+        if not CLOUDFRONT_SIGNING_AVAILABLE:
+            current_app.logger.warning("CloudFront signing packages not installed.")
+            return f"https://{self.cloudfront_domain}/{s3_key}"
+            
+        key_path = self.cloudfront_private_key_path
+        if not os.path.exists(key_path):
+            current_app.logger.error(f"CloudFront private key not found at: {key_path}")
+            return f"https://{self.cloudfront_domain}/{s3_key}"
+        
+        try:
+            with open(key_path, 'rb') as key_file:
+                private_key = serialization.load_pem_private_key(
+                    key_file.read(),
+                    password=None,
+                    backend=default_backend()
+                )
+                
+            expire_date = datetime.utcnow() + timedelta(seconds=expires)
+            cloudfront_signer = CloudFrontSigner(self.cloudfront_key_pair_id, self._rsa_signer(private_key))
+            
+            # Generate the signed URL
+            signed_url = cloudfront_signer.generate_presigned_url(
+                f"https://{self.cloudfront_domain}/{s3_key}",
+                date_less_than=expire_date
+            )
+            return signed_url
+        except Exception as e:
+            current_app.logger.error(f"Error creating signed CloudFront URL: {e}")
+            return f"https://{self.cloudfront_domain}/{s3_key}"
+    
+    def _rsa_signer(self, private_key):
+        """Return a signer function for CloudFront signed URLs"""
+        def sign_with_key(message):
+            return private_key.sign(
+                message,
+                padding.PKCS1v15(),
+                hashes.SHA1()
+            )
+        return sign_with_key
+    
     def get_file_url(self, s3_key, expires=3600):
         """Get temporary access URL for a file
         
@@ -77,6 +216,10 @@ class S3Service:
         Returns:
             presigned_url: Signed temporary access URL
         """
+        # If CloudFront is enabled, use it instead of direct S3 URLs
+        if self.use_cloudfront and self.cloudfront_domain:
+            return self.get_cloudfront_url(s3_key, expires)
+            
         try:
             # Log the key we're trying to access for debugging
             current_app.logger.debug(f"Generating presigned URL for bucket:{self.bucket_name}, key:{s3_key}")
@@ -126,6 +269,10 @@ class S3Service:
         Use this as a fallback if presigned URLs aren't working
         Note: Object must be publicly accessible for this to work
         """
+        # If CloudFront is enabled, use it instead of direct S3 URLs
+        if self.use_cloudfront and self.cloudfront_domain:
+            return f"https://{self.cloudfront_domain}/{s3_key}"
+            
         region = current_app.config['AWS_REGION']
         return f"https://{self.bucket_name}.s3.{region}.amazonaws.com/{s3_key}"
     
