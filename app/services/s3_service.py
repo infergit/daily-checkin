@@ -1,6 +1,8 @@
 import os
 import uuid
 import boto3
+import redis
+import time
 from botocore.exceptions import ClientError
 from datetime import datetime, timedelta
 from flask import current_app
@@ -43,8 +45,122 @@ class S3Service:
         self.cloudfront_key_pair_id = current_app.config.get('CLOUDFRONT_KEY_PAIR_ID', '')
         self.cloudfront_private_key_path = current_app.config.get('CLOUDFRONT_PRIVATE_KEY_PATH', '')
         
+        # Default URL expiration (30 days in seconds)
+        self.default_expires = 30 * 24 * 60 * 60  # 30 days
+        
+        # Initialize Redis client for URL caching
+        self._init_redis_client()
+        
         if self.use_cloudfront:
             current_app.logger.info(f"CloudFront distribution configured: {self.cloudfront_domain}")
+    
+    def _init_redis_client(self):
+        """Initialize Redis client for URL caching"""
+        try:
+            redis_host = current_app.config.get('REDIS_HOST')
+            redis_port = int(current_app.config.get('REDIS_PORT', 6379))
+            redis_password = current_app.config.get('REDIS_PASSWORD')
+            redis_ssl = current_app.config.get('REDIS_SSL', False)  # Changed to take boolean directly
+            redis_db = int(current_app.config.get('REDIS_DB', 0))
+            
+            # If REDIS_URL is provided, use it instead of individual settings
+            redis_url = current_app.config.get('REDIS_URL')
+            
+            if redis_url:
+                self.redis_client = redis.from_url(
+                    redis_url,
+                    socket_timeout=0.8,  # 800ms timeout instead of default
+                    socket_connect_timeout=0.8  # 800ms connection timeout
+                )
+                current_app.logger.info(f"Initialized Redis client using URL with 800ms timeout")
+            elif redis_host:
+                self.redis_client = redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    password=redis_password if redis_password else None,
+                    ssl=redis_ssl,
+                    db=redis_db,
+                    socket_timeout=0.8,  # 800ms timeout instead of 5s
+                    socket_connect_timeout=0.8  # 800ms connection timeout instead of 5s
+                )
+                current_app.logger.info(f"Initialized Redis client using host: {redis_host}, port: {redis_port}, timeout: 800ms")
+            else:
+                current_app.logger.warning("Redis configuration not found. URL caching disabled.")
+                self.redis_client = None
+                
+            # Test Redis connection
+            if self.redis_client:
+                self.redis_client.ping()
+                current_app.logger.info("Successfully connected to Redis")
+        except Exception as e:
+            current_app.logger.error(f"Failed to initialize Redis client: {e}")
+            self.redis_client = None
+    
+    def _get_cached_url(self, cache_key):
+        """
+        Get a URL from Redis cache if available
+        
+        Args:
+            cache_key: Redis cache key for the URL
+            
+        Returns:
+            cached_url or None if not found
+        """
+        if not self.redis_client:
+            return None
+            
+        try:
+            cached_url = self.redis_client.get(cache_key)
+            if cached_url:
+                current_app.logger.debug(f"Cache hit for {cache_key}")
+                return cached_url.decode('utf-8')
+            current_app.logger.debug(f"Cache miss for {cache_key}")
+            return None
+        except Exception as e:
+            current_app.logger.error(f"Error retrieving from Redis: {e}")
+            return None
+    
+    def _cache_url(self, cache_key, url, expires):
+        """
+        Store URL in Redis cache with expiration
+        
+        Args:
+            cache_key: Redis cache key
+            url: The URL to cache
+            expires: Validity period in seconds
+        """
+        if not self.redis_client or not url:
+            return
+            
+        try:
+            # Set TTL slightly shorter than actual URL expiry (90%)
+            ttl = int(expires * 0.9)
+            self.redis_client.setex(cache_key, ttl, url)
+            current_app.logger.debug(f"Cached URL for {cache_key} with TTL {ttl}s")
+        except Exception as e:
+            current_app.logger.error(f"Error storing in Redis: {e}")
+    
+    def _invalidate_cache(self, s3_key):
+        """
+        Invalidate cache entries for a specific S3 key
+        
+        Args:
+            s3_key: S3 object key to invalidate
+        """
+        if not self.redis_client:
+            return
+            
+        try:
+            # Remove both S3 and CloudFront URL cache entries
+            s3_cache_key = f"s3_url:{s3_key}"
+            cf_cache_key = f"cf_url:{s3_key}"
+            thumb_cache_key = f"s3_url:thumbnails/{s3_key}"
+            cf_thumb_cache_key = f"cf_url:thumbnails/{s3_key}"
+            
+            self.redis_client.delete(s3_cache_key, cf_cache_key, thumb_cache_key, cf_thumb_cache_key)
+            current_app.logger.debug(f"Invalidated cache for {s3_key}")
+        except Exception as e:
+            current_app.logger.error(f"Error invalidating Redis cache: {e}")
     
     def generate_s3_key(self, user_id, project_id, filename):
         """Generate unique S3 storage path
@@ -87,19 +203,30 @@ class S3Service:
             current_app.logger.error(f"Error uploading to S3: {e}")
             raise
     
-    def get_cloudfront_url(self, s3_key, expires=3600):
+    def get_cloudfront_url(self, s3_key, expires=None):
         """Get a CloudFront URL for a file
         
         Args:
             s3_key: File path in S3
-            expires: URL validity period (seconds)
+            expires: URL validity period (seconds), default 30 days
             
         Returns:
             url: CloudFront URL
         """
+        if expires is None:
+            expires = self.default_expires
+            
         if not self.use_cloudfront or not self.cloudfront_domain:
             # Fall back to S3 if CloudFront is not configured
             return self.get_file_url(s3_key, expires)
+        
+        # Create cache key
+        cache_key = f"cf_url:{s3_key}"
+        
+        # Check cache first
+        cached_url = self._get_cached_url(cache_key)
+        if cached_url:
+            return cached_url
         
         # If using CloudFront with private content, sign the URL
         if self.cloudfront_key_pair_id and self.cloudfront_private_key_path and CLOUDFRONT_SIGNING_AVAILABLE:
@@ -108,11 +235,13 @@ class S3Service:
                 if not os.path.exists(self.cloudfront_private_key_path):
                     current_app.logger.error(f"CloudFront private key not found at: {self.cloudfront_private_key_path}")
                     # Fall back to S3 presigned URL
-                    return self.s3_client.generate_presigned_url(
+                    url = self.s3_client.generate_presigned_url(
                         'get_object',
                         Params={'Bucket': self.bucket_name, 'Key': s3_key},
                         ExpiresIn=expires
                     )
+                    self._cache_url(cache_key, url, expires)
+                    return url
                 
                 # Read the private key
                 with open(self.cloudfront_private_key_path, 'rb') as key_file:
@@ -146,20 +275,27 @@ class S3Service:
                     date_less_than=expire_date
                 )
                 
+                # Cache the URL
+                self._cache_url(cache_key, signed_url, expires)
+                
                 current_app.logger.debug(f"Generated signed CloudFront URL for {s3_key}")
                 return signed_url
                 
             except Exception as e:
                 current_app.logger.error(f"Error generating signed CloudFront URL: {e}")
                 # Fall back to S3 presigned URL
-                return self.s3_client.generate_presigned_url(
+                url = self.s3_client.generate_presigned_url(
                     'get_object',
                     Params={'Bucket': self.bucket_name, 'Key': s3_key},
                     ExpiresIn=expires
                 )
+                self._cache_url(cache_key, url, expires)
+                return url
         
-        # Regular CloudFront URL (fallback, but will fail for private content)
-        return f"https://{self.cloudfront_domain}/{s3_key}"
+        # Regular CloudFront URL (fallback)
+        url = f"https://{self.cloudfront_domain}/{s3_key}"
+        self._cache_url(cache_key, url, expires)
+        return url
     
     def _get_signed_cloudfront_url(self, s3_key, expires=3600):
         """Generate a signed CloudFront URL for private content
@@ -206,23 +342,34 @@ class S3Service:
             )
         return sign_with_key
     
-    def get_file_url(self, s3_key, expires=3600):
+    def get_file_url(self, s3_key, expires=None):
         """Get temporary access URL for a file
         
         Args:
             s3_key: File path in S3
-            expires: URL validity period (seconds), default 1 hour
+            expires: URL validity period (seconds), default 30 days
             
         Returns:
             presigned_url: Signed temporary access URL
         """
+        if expires is None:
+            expires = self.default_expires
+            
         # If CloudFront is enabled, use it instead of direct S3 URLs
         if self.use_cloudfront and self.cloudfront_domain:
             return self.get_cloudfront_url(s3_key, expires)
+        
+        # Create cache key
+        cache_key = f"s3_url:{s3_key}"
+        
+        # Check cache first
+        cached_url = self._get_cached_url(cache_key)
+        if cached_url:
+            return cached_url
             
         try:
             # Log the key we're trying to access for debugging
-            current_app.logger.debug(f"Generating presigned URL for bucket:{self.bucket_name}, key:{s3_key}")
+            current_app.logger.debug(f"Cache miss - Generating presigned URL for bucket:{self.bucket_name}, key:{s3_key}")
             
             presigned_url = self.s3_client.generate_presigned_url(
                 'get_object',
@@ -232,6 +379,10 @@ class S3Service:
                 },
                 ExpiresIn=expires
             )
+            
+            # Cache the URL
+            self._cache_url(cache_key, presigned_url, expires)
+            
             return presigned_url
             
         except ClientError as e:
@@ -242,16 +393,19 @@ class S3Service:
         """Alias for get_file_url method to maintain compatibility with templates"""
         return self.get_file_url(s3_key, expires)
     
-    def get_thumbnail_url(self, original_key, expires=3600):
+    def get_thumbnail_url(self, original_key, expires=None):
         """Get thumbnail URL for an image
         
         Args:
             original_key: Original image key
-            expires: URL validity period (seconds)
+            expires: URL validity period (seconds), default 30 days
             
         Returns:
             presigned_url: Signed thumbnail URL
         """
+        if expires is None:
+            expires = self.default_expires
+            
         # Make sure we don't have multiple 'thumbnails/' prefixes
         if original_key.startswith('thumbnails/'):
             thumbnail_key = original_key
@@ -290,8 +444,11 @@ class S3Service:
                 Bucket=self.bucket_name,
                 Key=s3_key
             )
+            
+            # Invalidate cache entries for this file
+            self._invalidate_cache(s3_key)
+            
             return True
             
         except ClientError as e:
             current_app.logger.error(f"Error deleting file from S3: {e}")
-            return False

@@ -37,4 +37,21 @@ class Config:
     # Miscellaneous
     TIMEZONE_DEFAULT = os.environ.get('TIMEZONE_DEFAULT', 'UTC')
     ITEMS_PER_PAGE = int(os.environ.get('ITEMS_PER_PAGE', 10))
+    
+    # Redis configuration for URL caching
+    REDIS_HOST = os.environ.get('REDIS_HOST')
+    REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+    REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD')
+    REDIS_SSL = os.environ.get('REDIS_SSL', 'False').lower() == 'true'
+    REDIS_DB = int(os.environ.get('REDIS_DB', 0))
+    REDIS_URL = os.environ.get('REDIS_URL')
+
+class DevelopmentConfig(Config):
+    # Development-specific settings
+    # You can override Redis settings for development if needed
+    pass
+
+class ProductionConfig(Config):
+    # Production-specific settings
+    pass
 
