@@ -60,7 +60,7 @@ def send_async_telegram_message(chat_id, message, disable_notification=False):
     thread.start()
     return True
 
-def format_checkin_notification(sender_username, project_name, check_note, check_time):
+def format_checkin_notification(sender_username, project_name, check_note, check_time, image_count=0):
     """Format a check-in notification message"""
     # Format the time in a user-friendly way
     local_time = to_user_timezone(check_time)
@@ -70,12 +70,14 @@ def format_checkin_notification(sender_username, project_name, check_note, check
     message = (
         f"🔔 <b>Check-in Alert!</b>\n\n"
         f"Your friend <b>{sender_username}</b> just completed a check-in "
-        f"for project <b>{project_name}</b>!\n\n"
+        f"for project <b>{project_name}</b>"
     )
     
-    # Add check-in note if provided
-    if check_note and check_note.strip():
-        message += f"📝 <b>Note:</b> \"{check_note}\"\n\n"
+    # Add image count if there are any
+    if image_count > 0:
+        message += f" with {image_count} image{'s' if image_count > 1 else ''}"
+    
+    message += "!\n\n"
     
     # Add check-in time
     message += f"⏰ <b>Time:</b> {formatted_time}"
@@ -131,11 +133,15 @@ def notify_friends_of_checkin(user, project, checkin):
                 continue
                 
             # Format and send the notification
+            # Get image count using the proper method
+            image_count = checkin.images_count
+               
             message = format_checkin_notification(
                 user.username,
                 project.name,
-                checkin.note,
-                checkin.check_time
+                checkin.note,  # This is still passed but won't be used in the message
+                checkin.check_time,
+                image_count
             )
             
             send_async_telegram_message(chat_id, message)

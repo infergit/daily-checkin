@@ -886,6 +886,9 @@ def ajax_checkin():
                     except Exception as e:
                         current_app.logger.error(f"Failed to process image {image.filename}: {str(e)}")
                         continue
+        
+    # Update images count
+    checkin.images_count = images_added
     
     try:
         # Notify friends
