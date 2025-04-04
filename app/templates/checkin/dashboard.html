@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const maxSize = parseInt(imageInput.dataset.maxSize);
                 if (file.size > maxSize) {
                     // FIXED: Escape JavaScript template literals for Jinja
-                    alert('File ' + file.name + ' exceeds the maximum size limit of ' + (maxSize/1024/1024) + 'MB');
+                    alert('File ' + file.name + ' exceeds the maximum size limit of ' + (maxSize/1024/1024) + 'MB. Size: ' + (file.size/1024/1024).toFixed(2) + 'MB');
                     continue;
                 }
                 

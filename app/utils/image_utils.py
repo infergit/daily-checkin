@@ -106,35 +106,41 @@ def correct_image_orientation(img):
         PIL Image object with correct orientation
     """
     try:
-        # Extract EXIF data
-        exif = img._getexif()
-        
-        if (exif):
-            # Find orientation tag
-            orientation_key = None
-            for key, value in ExifTags.TAGS.items():
-                if value == 'Orientation':
-                    orientation_key = key
-                    break
+        # Skip EXIF processing for HEIF images
+        if isinstance(img, Image.Image) and hasattr(img, 'format') and img.format in ['HEIF', 'HEIC']:
+            logger.info("Skipping EXIF orientation for HEIF/HEIC image")
+            return img
             
-            if orientation_key and orientation_key in exif:
-                orientation = exif[orientation_key]
+        # Extract EXIF data (only for JPEG and similar formats)
+        if hasattr(img, '_getexif'):
+            exif = img._getexif()
+            
+            if exif:
+                # Find orientation tag
+                orientation_key = None
+                for key, value in ExifTags.TAGS.items():
+                    if value == 'Orientation':
+                        orientation_key = key
+                        break
                 
-                # Rotate based on orientation value
-                if orientation == 2:
-                    img = img.transpose(Image.FLIP_LEFT_RIGHT)
-                elif orientation == 3:
-                    img = img.rotate(180)
-                elif orientation == 4:
-                    img = img.transpose(Image.FLIP_TOP_BOTTOM)
-                elif orientation == 5:
-                    img = img.transpose(Image.FLIP_LEFT_RIGHT).rotate(90)
-                elif orientation == 6:
-                    img = img.rotate(270)
-                elif orientation == 7:
-                    img = img.transpose(Image.FLIP_LEFT_RIGHT).rotate(270)
-                elif orientation == 8:
-                    img = img.rotate(90)
+                if orientation_key and orientation_key in exif:
+                    orientation = exif[orientation_key]
+                    
+                    # Rotate based on orientation value
+                    if orientation == 2:
+                        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+                    elif orientation == 3:
+                        img = img.rotate(180)
+                    elif orientation == 4:
+                        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+                    elif orientation == 5:
+                        img = img.transpose(Image.FLIP_LEFT_RIGHT).rotate(90)
+                    elif orientation == 6:
+                        img = img.rotate(270)
+                    elif orientation == 7:
+                        img = img.transpose(Image.FLIP_LEFT_RIGHT).rotate(270)
+                    elif orientation == 8:
+                        img = img.rotate(90)
     
     except (AttributeError, KeyError, IndexError) as e:
         # Some images don't have EXIF data or have corrupt data
