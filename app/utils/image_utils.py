@@ -16,83 +16,96 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-def process_image(image_data, max_width=1200, quality=100, format='JPEG'):
+def process_image(image_data, max_width=1200, quality=85, format='JPEG'):
     """
-    Process an image for storage:
-    1. Resize large images while maintaining aspect ratio
-    2. Optionally convert format
-    3. Handle EXIF rotation
-    4. Strip EXIF metadata for privacy
-    5. Preserve maximum original image quality
-    
-    Args:
-        image_data (bytes): Raw image data
-        max_width (int): Maximum width to resize to
-        quality (int): JPEG/WebP quality (1-100)
-        format (str): Target format ('JPEG', 'PNG', 'WEBP')
-        
-    Returns:
-        tuple: (processed_image_data, new_content_type, width, height)
+    Process an image for storage with optimized memory usage
     """
     try:
-        # With pillow_heif registered, we can directly open HEIC files with PIL
-        img = Image.open(BytesIO(image_data))
-        
-        # Handle EXIF rotation but don't keep the EXIF data
-        img = correct_image_orientation(img)
-        
-        # Create a new image with same pixel data but no EXIF metadata
-        if format == 'JPEG' and img.mode == 'RGBA':
-            # Convert RGBA to RGB if saving as JPEG
-            clean_img = Image.new('RGB', img.size)
-        else:
-            clean_img = Image.new(img.mode, img.size)
-        
-        # Copy the pixel data (without metadata)
-        clean_img.paste(img)
-        
-        # Use our clean image from now on
-        img = clean_img
-        
-        # Get original dimensions
-        original_width, original_height = img.size
-        
-        # Resize if width exceeds max_width
-        if original_width > max_width:
-            ratio = max_width / original_width
-            new_height = int(original_height * ratio)
-            img = img.resize((max_width, new_height), Image.LANCZOS)
-        
-        # Save the processed image to bytes
-        output = BytesIO()
-        
-        # Save with appropriate format and settings, but no EXIF data
-        # Maximum quality (100) to preserve all original quality
-        if format == 'JPEG':
-            img.save(output, format=format, quality=quality, optimize=True, exif=bytes())
-            content_type = 'image/jpeg'
-        elif format == 'PNG':
-            img.save(output, format=format, optimize=True)
-            content_type = 'image/png'
-        elif format == 'WEBP':
-            img.save(output, format=format, quality=quality)
-            content_type = 'image/webp'
-        else:
-            # Default to JPEG
-            img.save(output, format='JPEG', quality=quality, optimize=True, exif=bytes())
-            content_type = 'image/jpeg'
-        
-        # Get current dimensions after processing
-        width, height = img.size
-        
-        # Get the processed image data
-        processed_data = output.getvalue()
-        
-        return processed_data, content_type, width, height
+        # Use a context manager with BytesIO to ensure proper cleanup
+        with BytesIO(image_data) as input_stream:
+            # Open image but don't fully decode it yet
+            img = Image.open(input_stream)
+            
+            # Record format before any processing
+            original_format = img.format
+            is_heif = original_format in ['HEIF', 'HEIC']
+            
+            # Get original dimensions first - this doesn't fully load the image
+            original_width, original_height = img.size
+            
+            # Calculate new dimensions if needed - before loading full image
+            if original_width > max_width:
+                ratio = max_width / original_width
+                new_height = int(original_height * ratio)
+                new_dimensions = (max_width, new_height)
+                resize_needed = True
+            else:
+                new_dimensions = (original_width, original_height)
+                resize_needed = False
+            
+            # Now fully load the image and process it
+            img.load()
+            
+            # Handle EXIF rotation - simpler handling to reduce memory usage
+            if not is_heif and hasattr(img, '_getexif') and img._getexif():
+                orientation_key = next((k for k, v in ExifTags.TAGS.items() if v == 'Orientation'), None)
+                if orientation_key and orientation_key in img._getexif():
+                    orientation = img._getexif()[orientation_key]
+                    if orientation in [3, 6, 8]:
+                        if orientation == 3:
+                            img = img.rotate(180, expand=True)
+                        elif orientation == 6:
+                            img = img.rotate(270, expand=True)
+                        elif orientation == 8:
+                            img = img.rotate(90, expand=True)
+            
+            # Handle format conversion and resize in one step when possible
+            if format == 'JPEG' and img.mode == 'RGBA':
+                # If RGBA and saving as JPEG, convert to RGB
+                if resize_needed:
+                    img = img.resize(new_dimensions, Image.LANCZOS).convert('RGB')
+                else:
+                    img = img.convert('RGB')
+            elif resize_needed:
+                img = img.resize(new_dimensions, Image.LANCZOS)
+            
+            # Save processed image directly to bytes
+            output = BytesIO()
+            
+            # Set appropriate content type
+            content_types = {
+                'JPEG': 'image/jpeg',
+                'PNG': 'image/png',
+                'WEBP': 'image/webp'
+            }
+            content_type = content_types.get(format, 'image/jpeg')
+            
+            # Use lower quality (85 instead of 100) for better compression
+            if format == 'JPEG':
+                img.save(output, format=format, quality=quality, optimize=True)
+            elif format == 'PNG':
+                img.save(output, format=format, optimize=True)
+            elif format == 'WEBP':
+                img.save(output, format=format, quality=quality)
+            else:
+                img.save(output, format='JPEG', quality=quality, optimize=True)
+            
+            # Get final dimensions
+            width, height = img.size
+            
+            # Get processed data and explicitly close images
+            output.seek(0)
+            processed_data = output.getvalue()
+            
+            # Explicitly close and delete objects to free memory
+            img.close()
+            del img
+            output.close()
+            
+            return processed_data, content_type, width, height
     
     except Exception as e:
         logger.error(f"Error processing image: {str(e)}")
-        # Return original data on error
         return image_data, None, None, None
 
 def correct_image_orientation(img):
@@ -149,47 +162,28 @@ def correct_image_orientation(img):
     return img
 
 def create_thumbnail(image_data, size=None):
-    """
-    Create a thumbnail from image data
-    
-    Args:
-        image_data (bytes): Raw image data
-        size (tuple): (width, height) for thumbnail, uses config default if None
-        
-    Returns:
-        bytes: Thumbnail image data
-    """
     if size is None:
         size = current_app.config.get('THUMBNAIL_SIZE', (300, 300))
     
     try:
-        # Open the image
-        img = Image.open(BytesIO(image_data))
-        
-        # Handle EXIF rotation
-        img = correct_image_orientation(img)
-        
-        # Create a clean image without EXIF data
-        if img.mode == 'RGBA':
-            clean_img = Image.new('RGB', img.size)
-        else:
-            clean_img = Image.new(img.mode, img.size)
-            
-        # Copy the pixel data (without metadata)
-        clean_img.paste(img)
-        img = clean_img
-        
-        # Create thumbnail (maintains aspect ratio)
-        img.thumbnail(size, Image.LANCZOS)
-        
-        # Save thumbnail to bytes
-        output = BytesIO()
-        
-        # Save optimized JPEG with no EXIF data - higher quality for thumbnails
-        img.save(output, format='JPEG', quality=95, optimize=True, exif=bytes())
-        
-        return output.getvalue()
-    
+        # First, downsize the image to a more manageable size before creating thumbnail
+        with BytesIO(image_data) as input_stream:
+            # Open image but don't decode fully
+            with Image.open(input_stream) as img:
+                original_format = img.format
+                original_size = img.size
+                
+                # Directly create thumbnail - more memory efficient
+                img.thumbnail(size, Image.LANCZOS)
+                
+                # Save as JPEG with reasonable quality
+                output = BytesIO()
+                img.save(output, format='JPEG', quality=85, optimize=True)
+                
+                thumbnail_data = output.getvalue()
+                output.close()
+                return thumbnail_data
+                
     except Exception as e:
         logger.error(f"Error creating thumbnail: {str(e)}")
         return None
