@@ -23,7 +23,6 @@
                 </div>
             </div>
             <div class="card-body">
-                <h5>Today's Check-in</h5>
                 {% if already_checked_in %}
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle-fill"></i> You've already checked in today!
@@ -32,24 +31,28 @@
                     <form method="POST" action="" enctype="multipart/form-data">
                         {{ form.hidden_tag() }}
                         <div class="mb-3">
-                            {{ form.note.label(class="form-label") }}
-                            {{ form.note(class="form-control", rows=3) }}
+                            {{ form.note(class="form-control", rows=3, placeholder="Capture some moment...") }}
                             {% for error in form.note.errors %}
                                 <div class="text-danger">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="mb-3">
-                            <label for="images" class="form-label">Images (Optional)</label>
+                        <div class="mb-3" id="image-preview-container-box" style="display: none;">
                             <input class="form-control" type="file" id="images" name="images" multiple 
-                                   accept=".jpg,.jpeg,.png,.gif,.webp,.heic,.heif" data-max-size="{{ config.MAX_IMAGE_SIZE }}">
-                            <div class="form-text">
-                                Select up to 5 images. Allowed formats: JPG, PNG, GIF, WebP, HEIC/HEIF (iPhone). Max size: {{ (config.MAX_IMAGE_SIZE / 1024 / 1024)|int }}MB each.
-                            </div>
+                                   accept=".jpg,.jpeg,.png,.gif,.webp,.heic,.heif" data-max-size="{{ config.MAX_IMAGE_SIZE }}" style="display:none;">
+                            <div class="form-text"></div>
                         </div>
                         <div class="d-flex gap-2 align-items-center">
                             <div class="flex-grow-1">
                                 <div class="input-group">
-                                    <span class="input-group-text">@</span>
+                                    <span class="input-group-text d-flex align-items-center" id="imginput">
+                                        <label for="images" class="form-label mb-0 d-inline-block" style="cursor: pointer; transition: transform 0.15s ease;">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16">
+                                                <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                                                <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                                            </svg>
+                                        </label>
+                                    </span>
+                                    <label for="project_id" class="input-group-text" style="cursor: pointer;">@</label>
                                     <select name="project_id" id="project_id" class="form-select" aria-label="Select project">
                                         {% for p in projects %}
                                             <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>
@@ -145,6 +148,7 @@
 {{ super() }}  <!-- This keeps any scripts from the parent template -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const previewWrapper = document.getElementById('image-preview-container-box');
     // Image preview and management functionality
     const imageInput = document.getElementById('images');
     const previewContainer = document.createElement('div');
@@ -161,6 +165,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const files = e.target.files;
         
         if (files.length > 0) {
+            // Show the container when files are selected
+            previewWrapper.style.display = 'flex';
             // Process new files
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];

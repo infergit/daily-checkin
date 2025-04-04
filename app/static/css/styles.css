@@ -208,3 +208,16 @@ main {
 .preserve-newlines {
     white-space: pre-line;
 }
+
+/* Preserve newlines in notes */
+.preserve-newlines {
+    white-space: pre-line;
+}
+
+label[for="images"]:hover {
+    transform: scale(1.2);
+    opacity: 0.8;
+}
+label[for="images"]:active {
+    transform: scale(0.90);
+}
